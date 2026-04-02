@@ -11,3 +11,13 @@ wheels/
 
 # Environment variables
 .env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+.python-version
+uv.lock
