@@ -12,15 +12,16 @@ class SupabaseService:
             logger.warning(f"No se pudo inicializar el cliente de Supabase (URL/KEY inválidos): {e}")
             self.client = None
 
-    def get_sensor_history(self, hours: int = 24):
-        """Consulta el historial de sensores desde la tabla real en Supabase."""
+    def get_sensor_history(self, user_id: str, hours: int = 24):
+        """Consulta el historial de sensores desde la tabla real en Supabase por usuario."""
         if not self.client:
             return "Error: Supabase no configurado correctamente."
         
         try:
-            # Consultamos los últimos registros ordenados por tiempo
+            # Consultamos los últimos registros del usuario
             response = self.client.table("sensor_data") \
                 .select("*") \
+                .eq("user_id", user_id) \
                 .order("created_at", desc=True) \
                 .limit(20) \
                 .execute()
@@ -38,13 +39,14 @@ class SupabaseService:
             logger.error(f"Error consultando Supabase: {e}")
             return f"Error técnico al consultar el historial: {str(e)}"
 
-    def get_latest_sensors(self) -> dict:
-        """Obtiene el último registro de sensores para usar como contexto real."""
+    def get_latest_sensors(self, user_id: str) -> dict:
+        """Obtiene el último registro de sensores por usuario."""
         if not self.client:
             return {}
         try:
             response = self.client.table("sensor_data") \
                 .select("*") \
+                .eq("user_id", user_id) \
                 .order("created_at", desc=True) \
                 .limit(1) \
                 .execute()
@@ -53,12 +55,14 @@ class SupabaseService:
             logger.error(f"Error obteniendo último sensor: {e}")
             return {}
 
-    def insert_sensor_data(self, data: dict):
-        """Inserta un nuevo registro de sensores en Supabase."""
+    def insert_sensor_data(self, data: dict, user_id: str):
+        """Inserta un nuevo registro de sensores asociado a un usuario."""
         if not self.client:
             return False
         
         try:
+            # Añadir user_id a la data si no está
+            data["user_id"] = user_id
             response = self.client.table("sensor_data").insert(data).execute()
             return True if response.data else False
         except Exception as e:

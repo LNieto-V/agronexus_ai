@@ -9,7 +9,7 @@ from app.prompts import build_prompt
 
 logger = logging.getLogger(__name__)
 
-async def process_chatbot_request(message: str) -> Tuple[str, List[dict], List[str]]:
+async def process_chatbot_request(message: str, user_id: str) -> Tuple[str, List[dict], List[str]]:
     """
     Orquesta el flujo completo de una solicitud del usuario humano:
     1. Obtiene contexto histórico, de estado y LOS ÚLTIMOS DATOS DE SENSORES.
@@ -17,10 +17,10 @@ async def process_chatbot_request(message: str) -> Tuple[str, List[dict], List[s
     3. Llama al LLM.
     4. Extrae y formatea la respuesta IoT.
     """
-    # 1. Obtener contexto externo (incluyendo los últimos sensores registrados)
-    history = supabase_db.get_sensor_history()
+    # 1. Obtener contexto externo (filtrado por usuario)
+    history = supabase_db.get_sensor_history(user_id)
     current_state = backend_state.get_state()
-    latest_sensors = supabase_db.get_latest_sensors()
+    latest_sensors = supabase_db.get_latest_sensors(user_id)
     
     # 2. Construir prompt usando los últimos datos automáticos
     full_prompt = build_prompt(
@@ -36,15 +36,15 @@ async def process_chatbot_request(message: str) -> Tuple[str, List[dict], List[s
     # 4. Extraer datos estructurados
     return extract_iot_data(raw_text)
 
-async def process_automated_telemetry(sensor_data: Dict[str, Any]) -> Tuple[List[dict], List[str]]:
+async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str) -> Tuple[List[dict], List[str]]:
     """
     Procesa telemetría de hardware (ESP32):
-    1. Guarda los datos en Supabase automáticamente.
+    1. Guarda los datos en Supabase automáticamente asociados al usuario.
     2. FILTRO: Solo consulta a la IA si hay anomalías importantes.
     3. Retorna acciones solo cuando es crítico (Ahorra Cuota API).
     """
     # 1. Persistencia automática (Siempre ocurre)
-    supabase_db.insert_sensor_data(sensor_data)
+    supabase_db.insert_sensor_data(sensor_data, user_id)
     
     # 2. Verificar anomalías (Umbrales de seguridad)
     if not is_anomaly(sensor_data):
@@ -52,10 +52,10 @@ async def process_automated_telemetry(sensor_data: Dict[str, Any]) -> Tuple[List
         return [], [] # Todo normal, no hay acciones ni alertas requeridas
 
     # 3. Datos anómalos encontrados -> Activar IA
-    logger.warning("Anomalía detectada. Consultando a la IA...")
+    logger.warning(f"Anomalía detectada para usuario {user_id}. Consultando a la IA...")
     
-    # Obtener contexto
-    history = supabase_db.get_sensor_history()
+    # Obtener contexto filtrado
+    history = supabase_db.get_sensor_history(user_id)
     current_state = backend_state.get_state()
     
     # Prompt de monitoreo técnico

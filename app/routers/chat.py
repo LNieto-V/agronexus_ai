@@ -1,17 +1,18 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import logging
 from app.schemas import ChatRequest, ChatResponse
 from app.services.iot_service import process_chatbot_request
+from app.services.security import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest, user = Depends(get_current_user)) -> ChatResponse:
     """Endpoint principal delegado al servicio de orquestación IoT."""
     try:
-        # El chatbot humano ya no envía datos de sensores; los obtenemos de la DB
-        text, actions, alerts = await process_chatbot_request(request.message)
+        # El chatbot humano ya no envía datos de sensores; los obtenemos de la DB filtrando por usuario
+        text, actions, alerts = await process_chatbot_request(request.message, user["id"])
         
         return ChatResponse(
             response=text,
