@@ -1,18 +1,29 @@
-# Agronomía IoT y Parámetros Óptimos
+# Agronomía IoT: Contexto Tropical (Santa Marta / Caribe)
 
-Los siguientes parámetros son aplicables a cultivos hidropónicos estándar (lechugas, hierbas aromáticas):
+Los siguientes parámetros están optimizados para cultivos en la **Zona del Caribe (Santa Marta)**, priorizando el manejo de calor extremo y alta humedad relativa.
 
-## Rangos Técnicos
-- **Temperatura (Optimo)**: 18°C - 24°C
-  - **Crítico bajo**: < 10°C (Activar calefacción / Cerrar ventilación)
-  - **Crítico alto**: > 28°C (Activar ventiladores / Aumentar humedad)
-- **Humedad Relativa (Optimo)**: 60% - 80%
-  - **Humedad baja**: < 40% (Activar humidificador)
-  - **Humedad alta**: > 90% (Activar ventilador para circulación de aire y prevenir hongos)
-- **Lumenes / Intensidad Lumínica (Fase Vegetativa)**: 5000 - 15000 lumens
-  - **Luz insuficiente**: < 3000 lumens (Activar luces LED)
-  - **Luz excesiva**: > 25000 lumens (Apagar luces / Activar sombreado si está disponible)
+## Cultivos de Referencia (Tropicales)
 
-## Referencia de Conductividad y pH (Avanzado)
-- **pH**: 5.5 - 6.5
-- **EC (Conductividad Eléctrica)**: 1.2 - 2.0 mS/cm
+### 🍅 Tomate Tropical (Heat Master / Variedades de Calor)
+- **Temperatura (Optimo)**: 24°C - 30°C
+  - **Crítico alto**: > 34°C (Riesgo de caída de flor y quemadura de tejido).
+- **Humedad (VPD)**: 0.8 - 1.2 kPa para transpiración óptima.
+- **pH**: 5.8 - 6.3
+- **EC**: 2.0 - 2.5 mS/cm
+
+### 🫑 Pimientos / Ají Dulce
+- **Temperatura (Optimo)**: 25°C - 31°C
+- **Humedad Relativa**: 65% - 75% (Evitar > 85% por riesgo de *Antracnosis*).
+- **Luz**: Alta intensidad (15000 - 30000 lux).
+
+## Métrica Avanzada: VPD (Déficit de Presión de Vapor)
+El VPD es la diferencia entre la cantidad de humedad presente en el aire y la cantidad que el aire puede retener cuando está saturado. En Santa Marta, con alta T y alta H, el VPD tiende a ser bajo.
+
+- **VPD Bajo (< 0.5 kPa)**: El aire está casi saturado. El cultivo no traspira, no absorbe nutrientes (riesgo de pudrición de raíz). ➡️ *Acción: Activar FAN + HEATER (para subir T y secar aire).*
+- **VPD Óptimo (0.8 - 1.2 kPa)**: Salud perfecta, crecimiento acelerado.
+- **VPD Alto (> 2.0 kPa)**: El aire está muy seco. El cultivo cierra estomas para no deshidratarse (muerte por estrés). ➡️ *Acción: Activar HUMIDIFIER + SHADING.*
+
+## Rangos Técnicos Generales (Santa Marta)
+- **Temperatura Crítica**: > 35°C (Activar todos los métodos de enfriamiento).
+- **Humedad Crítica**: > 90% (Activar ventilación forzada constante para evitar hongos).
+- **Intensidad Lumínica**: Controlar sombra en horas pico (11:00 AM - 3:00 PM).
