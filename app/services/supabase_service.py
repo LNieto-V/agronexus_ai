@@ -7,7 +7,9 @@ logger = logging.getLogger(__name__)
 class SupabaseService:
     def __init__(self):
         try:
-            self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            # Usar service_role_key para bypass de RLS en el backend
+            key = settings.SUPABASE_SERVICE_ROLE_KEY if settings.SUPABASE_SERVICE_ROLE_KEY != "your_service_role_key" else settings.SUPABASE_KEY
+            self.client: Client = create_client(settings.SUPABASE_URL, key)
         except Exception as e:
             logger.warning(f"No se pudo inicializar el cliente de Supabase (URL/KEY inválidos): {e}")
             self.client = None

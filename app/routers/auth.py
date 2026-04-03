@@ -29,7 +29,7 @@ async def get_keys(user = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Error al obtener llaves: {str(e)}")
 
 @router.post("/keys", response_model=NewAPIKeyResponse)
-async def create_key(key_type: str = Query(..., regex="^(read|write)$"), user = Depends(get_current_user)):
+async def create_key(key_type: str = Query(..., pattern="^(read|write)$"), user = Depends(get_current_user)):
     """
     Genera una nueva API Key para el usuario. 
     Si ya existe una de ese tipo, se sobrescribe (se rota).

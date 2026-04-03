@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+import json
 from datetime import datetime
 from typing import Optional
 from fastapi import Header, HTTPException, Security
@@ -7,6 +8,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.config import settings
 from app.services.supabase_service import supabase_db
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Security schemes
 security_bearer = HTTPBearer()
@@ -25,17 +29,23 @@ async def get_current_user(auth: HTTPAuthorizationCredentials = Security(securit
     Verifica el JWT de Supabase y retorna la información del usuario.
     """
     try:
+        # Debug: Ver cabecera del token (ahora en WARNING para que lo veas)
+        header = jwt.get_unverified_header(auth.credentials)
+        logger.warning(f"DEBUG - JWT Header: {header}")
+
         payload = jwt.decode(
             auth.credentials, 
-            settings.SUPABASE_JWT_SECRET, 
-            algorithms=["HS256"],
-            options={"verify_aud": False} # Supabase usa aud: authenticated
+            json.loads(settings.SUPABASE_JWK) if header.get("alg") == "ES256" else settings.SUPABASE_JWT_SECRET, 
+            algorithms=["HS256", "HS384", "HS512", "ES256"],
+            options={"verify_aud": False}
         )
         user_id: str = payload.get("sub")
         if user_id is None:
+            logger.error("JWT decodificado pero falta el campo 'sub'")
             raise HTTPException(status_code=401, detail="Token inválido: No se encontró el sujet (sub).")
         return {"id": user_id, "email": payload.get("email")}
     except JWTError as e:
+        logger.warning(f"Fallo en la verificación de JWT: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Token inválido o expirado: {str(e)}")
 
 async def verify_key(api_key: str = Header(..., alias="X-API-Key"), expected_type: Optional[str] = None):
