@@ -1,6 +1,6 @@
-# Agronomía IoT: Contexto Tropical (Santa Marta / Caribe)
+# Agronomía IoT: Contexto Tropical y Zonas Costeras (Caribe / Santa Marta)
 
-Los siguientes parámetros están optimizados para cultivos en la **Zona del Caribe (Santa Marta)**, priorizando el manejo de calor extremo y alta humedad relativa.
+Los siguientes parámetros están optimizados para cultivos en **Zonas Costeras y del Caribe (ej. Santa Marta)**, priorizando el manejo de calor extremo, alta salinidad potencial y alta humedad relativa.
 
 ## Cultivos de Referencia (Tropicales)
 
@@ -15,6 +15,24 @@ Los siguientes parámetros están optimizados para cultivos en la **Zona del Car
 - **Temperatura (Optimo)**: 25°C - 31°C
 - **Humedad Relativa**: 65% - 75% (Evitar > 85% por riesgo de *Antracnosis*).
 - **Luz**: Alta intensidad (15000 - 30000 lux).
+
+### 🥒 Pepino Tropical (Variedades Partenocárpicas)
+- **Temperatura (Optimo)**: 24°C - 28°C
+- **Sensibilidad**: Muy sensible al estrés hídrico. Requiere riegos cortos y frecuentes en días de sol intenso.
+- **VPD Ideal**: 0.7 - 1.0 kPa.
+- **pH**: 5.5 - 6.0
+- **EC**: 1.7 - 2.2 mS/cm
+
+### 🍆 Berenjena (Alta Tolerancia Térmica)
+- **Temperatura (Optimo)**: 26°C - 32°C (Soporta picos de hasta 35°C si hay buena hidratación).
+- **Humedad**: Prefiere humedad ligeramente menor que el tomate (50% - 65%).
+- **Luz**: Requiere pleno sol. Alta resistencia a la radiación.
+
+### 🌿 Albahaca y Aromáticas (Ciclo Corto)
+- **Temperatura (Optimo)**: 22°C - 28°C
+- **Peligro Costero**: Exceso de sol directo mediodía quema las hojas; requiere malla polisombra (Shading) del 30-50%.
+- **Humedad**: Riesgo crítico de *Mildiu velloso* si la HR > 80% con mala ventilación.
+- **EC**: 1.0 - 1.6 mS/cm (Bajos requerimientos nutricionales).
 
 ## Métrica Avanzada: VPD (Déficit de Presión de Vapor)
 El VPD es la diferencia entre la cantidad de humedad presente en el aire y la cantidad que el aire puede retener cuando está saturado. En Santa Marta, con alta T y alta H, el VPD tiende a ser bajo.
