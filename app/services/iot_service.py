@@ -18,6 +18,7 @@ async def process_chatbot_request(message: str, user_id: str) -> Tuple[str, List
     4. Extrae y formatea la respuesta IoT.
     """
     # 1. Obtener contexto externo (filtrado por usuario)
+    chat_history = supabase_db.get_chat_history(user_id)
     history = supabase_db.get_sensor_history(user_id)
     current_state = backend_state.get_state()
     latest_sensors = supabase_db.get_latest_sensors(user_id)
@@ -27,14 +28,21 @@ async def process_chatbot_request(message: str, user_id: str) -> Tuple[str, List
         message=message, 
         sensor_data=latest_sensors,
         history=history,
-        backend_state=current_state
+        backend_state=current_state,
+        chat_history=chat_history
     )
 
     # 3. Obtener respuesta del LLM
     raw_text = await generate_raw_response(full_prompt)
     
     # 4. Extraer datos estructurados
-    return extract_iot_data(raw_text)
+    clean_text, actions, alerts = extract_iot_data(raw_text)
+    
+    # 5. Guardar Memoria Conversacional (Asíncrono en un hilo secundario sería ideal, aquí síncrono para simplicidad)
+    supabase_db.save_chat_message(user_id, "user", message)
+    supabase_db.save_chat_message(user_id, "ai", clean_text)
+    
+    return clean_text, actions, alerts
 
 async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str) -> Tuple[List[dict], List[str]]:
     """

@@ -31,3 +31,24 @@ async def chat(request: ChatRequest, user = Depends(get_current_user)) -> ChatRe
             status_code=500, 
             detail="Error interno procesando la solicitud agrícola."
         )
+
+@router.get("/chat/history")
+async def get_history(user = Depends(get_current_user)):
+    """
+    Recupera el historial de chat para mostrarlo en la interfaz.
+    """
+    from app.services.supabase_service import supabase_db
+    
+    if not supabase_db.client:
+        raise HTTPException(status_code=500, detail="Base de datos no disponible.")
+        
+    try:
+        response = supabase_db.client.table("chat_history").select("*") \
+                    .eq("user_id", user["id"]) \
+                    .order("created_at", desc=False) \
+                    .limit(50) \
+                    .execute()
+        return {"history": response.data}
+    except Exception as e:
+        logger.error(f"Error recuperando historial de chat: {e}")
+        raise HTTPException(status_code=500, detail="Error obteniendo historial.")

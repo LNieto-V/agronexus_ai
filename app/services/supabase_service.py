@@ -71,4 +71,45 @@ class SupabaseService:
             logger.error(f"Error insertando en Supabase: {e}")
             return False
 
+    def save_chat_message(self, user_id: str, role: str, message: str) -> None:
+        """Guarda un mensaje en el historial del chat."""
+        if not self.client:
+            return
+        try:
+            self.client.table("chat_history").insert({
+                "user_id": user_id,
+                "role": role,
+                "message": message
+            }).execute()
+        except Exception as e:
+            logger.error(f"Error guardando mensaje de chat para {user_id}: {e}")
+
+    def get_chat_history(self, user_id: str, limit: int = 6) -> str:
+        """
+        Recupera los últimos N mensajes del usuario y la IA formatados en texto.
+        """
+        if not self.client:
+            return ""
+        try:
+            response = self.client.table("chat_history").select("*") \
+                        .eq("user_id", user_id) \
+                        .order("created_at", desc=True) \
+                        .limit(limit) \
+                        .execute()
+            
+            if not response.data:
+                return ""
+                
+            # Los datos vienen más recientes primero, los invertimos cronológicamente
+            history_lines = []
+            for row in reversed(response.data):
+                role_label = "USUARIO" if row["role"] == "user" else "AGRONEXUS"
+                history_lines.append(f"{role_label}: {row['message']}")
+                
+            return "\n".join(history_lines)
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo historial de chat para {user_id}: {e}")
+            return ""
+
 supabase_db = SupabaseService()

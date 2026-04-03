@@ -17,7 +17,8 @@ def build_prompt(
     message: str, 
     sensor_data: Dict[str, Any] = None, 
     history: str = None, 
-    backend_state: Dict[str, Any] = None
+    backend_state: Dict[str, Any] = None,
+    chat_history: str = None
 ) -> str:
     """Constructs the final prompt string by concatenating modular files and data."""
     system_prompt = load_prompt_file("prompt.md")
@@ -42,6 +43,11 @@ def build_prompt(
         for key, value in backend_state.items():
             state_context += f"- {key}: {value}\n"
 
+    # Contexto Conversacional (Memoria del Chat)
+    chat_context = ""
+    if chat_history:
+        chat_context = f"\n## HISTORIAL DE LA CONVERSACIÓN RECIENTE:\n{chat_history}\n"
+
     final_prompt = f"""
 {system_prompt}
 
@@ -55,9 +61,11 @@ def build_prompt(
 {state_context}
 {sensor_context}
 
-## MENSAJE DEL USUARIO:
+{chat_context}
+
+## MENSAJE NUEVO DEL USUARIO:
 {message}
 
-Recuerda: Proactividad, seguridad (no llaves) y formato JSON al final.
+Recuerda: Breve, amigable y formato JSON al final.
 """
     return final_prompt.strip()
