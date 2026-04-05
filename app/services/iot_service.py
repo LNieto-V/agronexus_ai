@@ -9,12 +9,13 @@ from app.services.parser_service import extract_iot_data, is_anomaly
 
 logger = logging.getLogger(__name__)
 
-async def process_chatbot_request(message: str, user_id: str, db: SupabaseService) -> Tuple[str, List[dict], List[str]]:
+async def process_chatbot_request(message: str, user_id: str, db: SupabaseService, session_id: str | None = None) -> Tuple[str, List[dict], List[str]]:
     """
     Orquesta el flujo completo con procesamiento paralelo (asyncio.gather).
+    Si se pasa session_id, el historial y la memoria quedan aislados en esa sesión.
     """
     # 1. Obtener datos externos en PARALELO
-    raw_history_task = db.get_chat_history_raw(user_id, limit=15)
+    raw_history_task = db.get_chat_history_raw(user_id, limit=15, session_id=session_id)
     history_task = db.get_sensor_history(user_id)
     state_task = backend_state.get_state(user_id)
     latest_sensors_task = db.get_latest_sensors(user_id)
@@ -55,8 +56,8 @@ async def process_chatbot_request(message: str, user_id: str, db: SupabaseServic
     clean_text, actions, alerts = extract_iot_data(raw_text)
     
     # 6. Guardar Memoria Conversacional (En paralelo)
-    asyncio.create_task(db.save_chat_message(user_id, "user", message))
-    asyncio.create_task(db.save_chat_message(user_id, "ai", clean_text))
+    asyncio.create_task(db.save_chat_message(user_id, "user", message, session_id))
+    asyncio.create_task(db.save_chat_message(user_id, "ai", clean_text, session_id))
     
     return clean_text, actions, alerts
 

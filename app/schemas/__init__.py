@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from datetime import datetime
 
 class DeviceAction(BaseModel):
     device: str = Field(..., description="Nombre del dispositivo (FAN, LIGHT, etc.)")
@@ -15,6 +16,7 @@ class SensorData(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None  # Si es None, usa contexto global (sin sesión)
 
 class ChatResponse(BaseModel):
     response: str
@@ -35,3 +37,23 @@ class DashboardSummary(BaseModel):
     latest_sensors: SensorData
     system_state: dict
     active_alerts: List[str]
+
+# --- Sesiones / Conversaciones ---
+class ConversationCreate(BaseModel):
+    title: str = "Nueva conversación"
+
+class ConversationRename(BaseModel):
+    title: str
+
+class ConversationOut(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+class ChatMessageOut(BaseModel):
+    id: str
+    role: str
+    message: str
+    created_at: datetime
+    session_id: Optional[str] = None

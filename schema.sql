@@ -15,10 +15,22 @@ CREATE TABLE IF NOT EXISTS public.sensor_data (
 -- Índices para optimización de consultas históricas
 CREATE INDEX IF NOT EXISTS idx_sensor_data_user_created ON public.sensor_data(user_id, created_at DESC);
 
--- 2. Tabla para el historial del chat (Memoria Conversacional)
+-- 2. Tabla de sesiones/conversaciones (Multi-chat)
+CREATE TABLE IF NOT EXISTS public.conversations (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'Nueva conversación',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_user_created ON public.conversations(user_id, updated_at DESC);
+
+-- 3. Tabla para el historial del chat (Memoria Conversacional por Sesión)
 CREATE TABLE IF NOT EXISTS public.chat_history (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
     role TEXT NOT NULL CHECK (role IN ('user', 'ai')),
     message TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
@@ -26,8 +38,9 @@ CREATE TABLE IF NOT EXISTS public.chat_history (
 
 -- Índices para el chat
 CREATE INDEX IF NOT EXISTS idx_chat_history_user_created ON public.chat_history(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_history_session ON public.chat_history(session_id, created_at ASC);
 
--- 3. Tabla para la gestión de API Keys (Dispositivos IoT)
+-- 4. Tabla para la gestión de API Keys (Dispositivos IoT)
 CREATE TABLE IF NOT EXISTS public.api_keys (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     key_hash TEXT NOT NULL PRIMARY KEY,
@@ -36,7 +49,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Tabla para el estado del sistema (Configuración y persistencia)
+-- 5. Tabla para el estado del sistema (Configuración y persistencia)
 CREATE TABLE IF NOT EXISTS public.system_state (
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     system_mode TEXT DEFAULT 'AUTO' CHECK (system_mode IN ('AUTO', 'MANUAL')),
@@ -47,8 +60,9 @@ CREATE TABLE IF NOT EXISTS public.system_state (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. Políticas de Seguridad (RLS) - Vital para producción
+-- 6. Políticas de Seguridad (RLS) - Vital para producción
 ALTER TABLE public.sensor_data ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_state ENABLE ROW LEVEL SECURITY;
@@ -57,8 +71,11 @@ ALTER TABLE public.system_state ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own sensor data" ON public.sensor_data FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own sensor data" ON public.sensor_data FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can manage their own conversations" ON public.conversations FOR ALL USING (auth.uid() = user_id);
+
 CREATE POLICY "Users can view their own chat history" ON public.chat_history FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own chat history" ON public.chat_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own chat history" ON public.chat_history FOR DELETE USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can view their own api keys" ON public.api_keys FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own api keys" ON public.api_keys FOR INSERT WITH CHECK (auth.uid() = user_id);
