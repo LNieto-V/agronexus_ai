@@ -9,24 +9,30 @@ class ChatRepository(BaseRepository):
     # ==========================================
 
     async def create_conversation(self, user_id: str, title: str = "Nueva conversación") -> dict:
-        """Crea una nueva sesión de chat y devuelve su registro."""
+        """
+        Crea una nueva sesión de chat.
+        Usa .insert().execute() y devuelve el primer elemento de .data.
+        """
         if not self.client:
             return {}
         try:
             loop = asyncio.get_event_loop()
+            # Patrón sugerido para evitar SyncQueryRequestBuilder issues
+            payload = {"user_id": user_id, "title": title}
             response = await loop.run_in_executor(
                 None,
-                lambda: self.client.table("conversations").insert({
-                    "user_id": user_id, "title": title
-                }).execute()
+                lambda: self.client.table("conversations").insert(payload).execute()
             )
-            return response.data[0] if response.data else {}
+            if response.data:
+                logger.info(f"Conversación creada: {response.data[0].get('id')} para user {user_id}")
+                return response.data[0]
+            return {}
         except Exception as e:
             logger.error(f"Error en ChatRepository.create_conversation: {e}")
             return {}
 
     async def get_conversations(self, user_id: str) -> list:
-        """Lista todas las sesiones del usuario, las más recientes primero."""
+        """Lista todas las sesiones del usuario, ordenadas por updated_at DESC."""
         if not self.client:
             return []
         try:
@@ -34,7 +40,7 @@ class ChatRepository(BaseRepository):
             response = await loop.run_in_executor(
                 None,
                 lambda: self.client.table("conversations")
-                            .select("id, title, created_at, updated_at")
+                            .select("*")
                             .eq("user_id", user_id)
                             .order("updated_at", desc=True)
                             .execute()
@@ -89,17 +95,31 @@ class ChatRepository(BaseRepository):
     # ==========================================
 
     async def save_chat_message(self, user_id: str, role: str, message: str, session_id: str | None = None) -> None:
-        """Guarda un mensaje asociado opcionalmente a una sesión específica."""
+        """
+        Guarda un mensaje y actualiza el timestamp de la conversación.
+        """
         if not self.client:
             return
         try:
+            loop = asyncio.get_event_loop()
             from datetime import datetime, timezone
             now_iso = datetime.now(timezone.utc).isoformat()
-            loop = asyncio.get_event_loop()
-            payload = {"user_id": user_id, "role": role, "message": message}
+
+            # 1. Insertar el mensaje
+            payload = {
+                "user_id": user_id,
+                "role": role,
+                "message": message,
+                "session_id": session_id
+            }
+            
+            await loop.run_in_executor(
+                None,
+                lambda: self.client.table("chat_history").insert(payload).execute()
+            )
+
+            # 2. Actualizar updated_at de la conversación si aplica
             if session_id:
-                payload["session_id"] = session_id
-                # Actualizar timestamp de la sesión para ordenado correcto
                 await loop.run_in_executor(
                     None,
                     lambda: self.client.table("conversations")
@@ -108,11 +128,8 @@ class ChatRepository(BaseRepository):
                                 .eq("user_id", user_id)
                                 .execute()
                 )
-            await loop.run_in_executor(
-                None,
-                lambda: self.client.table("chat_history").insert(payload).execute()
-            )
-            logger.info(f"Chat message saved | role={role} | session={session_id or 'global'}")
+            
+            logger.info(f"Mensaje persistido | role: {role} | session: {session_id or 'global'}")
         except Exception as e:
             logger.error(f"Error en ChatRepository.save_chat_message: {e}")
 
@@ -143,14 +160,18 @@ class ChatRepository(BaseRepository):
             logger.error(f"Error en ChatRepository.get_chat_history: {e}")
             return ""
 
-    async def get_chat_history_raw(self, user_id: str, limit: int = 50, session_id: str | None = None) -> list:
-        """Devuelve el historial como lista de dicts (para la UI o compresión de memoria)."""
+    async def get_chat_history_raw(self, user_id: str, limit: int = 100, session_id: str | None = None) -> list:
+        """
+        Devuelve el historial como lista de dicts.
+        Si session_id es None, busca mensajes 'globales' (sin sesión).
+        """
         if not self.client:
             return []
         try:
             loop = asyncio.get_event_loop()
 
             def _query():
+                # Siempre aplicar .select() inmediatamente después de .table()
                 q = self.client.table("chat_history").select("*").eq("user_id", user_id)
                 if session_id:
                     q = q.eq("session_id", session_id)

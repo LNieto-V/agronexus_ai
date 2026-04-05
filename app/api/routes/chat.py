@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Path
 import logging
 from app.schemas import (
     ChatRequest, ChatResponse,
-    ConversationCreate, ConversationRename, ConversationOut, ChatMessageOut
+    ConversationCreate, ConversationRename, ConversationOut, ChatMessageOut, ChatHistoryOut
 )
 from app.services.iot_service import process_chatbot_request, process_test_chat_request
 from app.api.deps import CurrentUser, DBService
@@ -88,16 +88,15 @@ async def chat(request: ChatRequest, user: CurrentUser, db: DBService) -> ChatRe
         raise HTTPException(status_code=500, detail="Error procesando la solicitud.")
 
 
-@router.get("/chat/history", response_model=list[ChatMessageOut])
+@router.get("/chat/history", response_model=ChatHistoryOut)
 async def get_history(user: CurrentUser, db: DBService, session_id: str | None = None):
     """
     Recupera el historial de chat para la interfaz.
-    - Sin session_id → mensajes globales (sin sesión asignada).
-    - Con session_id → mensajes de esa conversación específica.
+    Devuelve un objeto { "history": [...] }
     """
     try:
         history = await db.get_chat_history_raw(user["id"], limit=100, session_id=session_id)
-        return history
+        return ChatHistoryOut(history=history)
     except Exception as e:
         logger.error(f"Error en historial: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo historial.")

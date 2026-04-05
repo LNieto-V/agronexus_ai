@@ -57,3 +57,6 @@ class ChatMessageOut(BaseModel):
     message: str
     created_at: datetime
     session_id: Optional[str] = None
+
+class ChatHistoryOut(BaseModel):
+    history: List[ChatMessageOut]

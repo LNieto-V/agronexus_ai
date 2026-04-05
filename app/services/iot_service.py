@@ -55,9 +55,9 @@ async def process_chatbot_request(message: str, user_id: str, db: SupabaseServic
     # 5. Extraer datos estructurados
     clean_text, actions, alerts = extract_iot_data(raw_text)
     
-    # 6. Guardar Memoria Conversacional (En paralelo)
-    asyncio.create_task(db.save_chat_message(user_id, "user", message, session_id))
-    asyncio.create_task(db.save_chat_message(user_id, "ai", clean_text, session_id))
+    # 6. Guardar Memoria Conversacional (Secuencial para asegurar integridad y timestamps)
+    await db.save_chat_message(user_id, "user", message, session_id)
+    await db.save_chat_message(user_id, "ai", clean_text, session_id)
     
     return clean_text, actions, alerts
 
