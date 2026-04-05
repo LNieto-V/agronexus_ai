@@ -11,13 +11,14 @@ AgroNexus AI es un asistente agrícola inteligente diseñado específicamente pa
 
 ## ⚡ Características Principales
 
+- **Arquitectura 100% Asíncrona (Non-Blocking)**: Orquestación optimizada con `asyncio.gather` para integraciones simultáneas con base de datos, memoria y LLM, diseñada para entornos Serverless de alta concurrencia.
 - **Orquestación IoT**: Recepción de telemetría y control de actuadores (Ventiladores, Luces, Riego) mediante lógica de anomalías.
-- **Seguridad Dual**:
+- **Seguridad Dual Limitada**:
   - **JWT (Supabase)**: Para usuarios finales en aplicaciones Web/Móviles.
   - **API Keys (SHA-256)**: Para dispositivos embebidos con permisos `read` y `write`.
-- **IA Proactiva**: Integración asíncrona con Gemini con detección inteligente de anomalías para optimizar el consumo de la cuota de API.
-- **RAG Simplificado**: Inyección de conocimiento agrícola costero y estado del sistema en tiempo real en los prompts.
-- **Persistencia Completa**: Cada mensaje de chat y lectura de sensor se almacena en Supabase para análisis histórico.
+- **IA Experta Proactiva**: Personalidad *AgTech SaaS* basada en Gemini 1.5/2.1 Flash con "Tono Espejo": respuestas breves a comandos, y explicaciones arquitectónicas profundas ante consultas técnicas.
+- **RAG Simplificado y Persistente**: Inyección de conocimiento agrícola costero y estado del sistema en tiempo real.
+- **Persistencia Distribuida**: Historial de chat, lectura de sensores y **Estado del Sistema** (System State) almacenados nativamente en Supabase, superando las limitaciones efímeras de Vercel/RAM.
 
 ---
 
@@ -60,6 +61,7 @@ Accede a la documentación interactiva en:
 
 ### Endpoints Críticos
 - `POST /chat`: Interfaz conversacional con el asistente (Requiere JWT).
+- `POST /chat/test`: **Endpoint de Evaluación**. Nodo de prueba público sin autenticación para revisar el despliegue del proyecto y la personalidad de la IA.
 - `POST /iot/telemetry`: Consumo de datos desde ESP32 (Requiere API Key `write`).
 - `GET /dashboard/latest`: Últimos valores de sensores (Requiere JWT).
 - `POST /auth/keys`: Gestión de API Keys para dispositivos (Requiere JWT).
@@ -73,17 +75,23 @@ Para desplegar este backend necesitas crear las siguientes tablas en tu instanci
 1.  `sensor_data`: Registra la telemetría histórica.
 2.  `chat_history`: Almacena la memoria conversacional.
 3.  `api_keys`: Gestiona las llaves de acceso para hardware IoT.
+4.  `system_state`: Persistencia del estado global (modos, mantenimientos) para entornos Serverless libres de RAM.
 
 > [!TIP]
 > Consulta el archivo `supabase_schema.sql` para ver la definición exacta de las tablas e índices.
 
 ---
 
-## 🧪 Pruebas
-El proyecto incluye una suite de pruebas en el directorio `/tests` para validar el sistema:
+## 🧪 Pruebas y Validación (QA)
+El proyecto incluye una suite exhaustiva de pruebas en el directorio `/tests` para validar la estabilidad de la arquitectura, conectividad asíncrona y seguridad criptográfica:
 ```bash
-uv run python tests/test_connection.py
-uv run python tests/test_iot_telemetry.py
+uv run python tests/test_connection.py     # Base de datos
+uv run python tests/test_iot_telemetry.py  # Endpoints y API Keys
+uv run python tests/test_supabase.py       # Servicios de Persistencia
+```
+Para probar la identidad y profundidad técnica del asistente en vivo:
+```bash
+curl -X POST http://localhost:8000/chat/test -H "Content-Type: application/json" -d '{"message": "¿Qué arquitectura manejas y cuál es tu stack?"}'
 ```
 
 ---
