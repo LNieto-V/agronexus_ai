@@ -14,14 +14,13 @@ class ChatRepository(BaseRepository):
             return {}
         try:
             loop = asyncio.get_event_loop()
-            # PostgREST requiere .select().single() para asegurar que devuelve el dato insertado
             response = await loop.run_in_executor(
                 None,
                 lambda: self.client.table("conversations").insert({
                     "user_id": user_id, "title": title
-                }).select().single().execute()
+                }).execute()
             )
-            return response.data if response.data else {}
+            return response.data[0] if response.data else {}
         except Exception as e:
             logger.error(f"Error en ChatRepository.create_conversation: {e}")
             return {}
