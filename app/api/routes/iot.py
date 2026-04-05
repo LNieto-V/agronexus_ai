@@ -2,17 +2,17 @@ from fastapi import APIRouter, HTTPException
 import logging
 from app.schemas import IOTTelemetryRequest, IOTTelemetryResponse
 from app.services.iot_service import process_automated_telemetry
-from app.api.deps import WriteKey
+from app.api.deps import WriteKey, DBService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/iot", tags=["iot"])
 
 @router.post("/telemetry", response_model=IOTTelemetryResponse)
-async def telemetry(request: IOTTelemetryRequest, user_id: WriteKey) -> IOTTelemetryResponse:
+async def telemetry(request: IOTTelemetryRequest, user_id: WriteKey, db: DBService) -> IOTTelemetryResponse:
     """Endpoint para telemetría de hardware (ESP32)."""
     try:
         sensor_data = request.sensor_data.model_dump()
-        actions, alerts = await process_automated_telemetry(sensor_data, user_id)
+        actions, alerts = await process_automated_telemetry(sensor_data, user_id, db)
         return IOTTelemetryResponse(actions=actions, alerts=alerts)
     except Exception as e:
         if "CUOTA_AGOTADA" in str(e):

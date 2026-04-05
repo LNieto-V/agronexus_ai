@@ -1,7 +1,9 @@
 import asyncio
-from app.prompts import build_prompt
-from app.llm import generate_raw_response
+import pytest
+from app.core.ai.prompts import build_prompt
+from app.core.ai.llm import generate_raw_response
 
+@pytest.mark.asyncio
 async def test_scenarios():
     print("🧪 Escenario 1: Datos faltantes (Proactividad)")
     sensor_data = {"temperature": 0, "humidity": 0} # Datos "vaciós"

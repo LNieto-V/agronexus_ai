@@ -39,3 +39,7 @@ Este skill permite al agente entender y operar sobre el corazón del ecosistema 
     - `rules.md`: Reglas de seguridad y formato JSON.
     - `knowledge.md`: Base de conocimientos agrícolas.
     - `devices.md`: Protocolos de dispositivos IoT.
+
+## Referencias y Ejemplos
+- Consulta los ejemplos de uso en `examples/usage.md`.
+- Revisa el detalle de arquitectura en `references/arch.md`.

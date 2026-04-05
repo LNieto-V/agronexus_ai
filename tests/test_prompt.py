@@ -1,4 +1,4 @@
-from app.prompts import build_prompt
+from app.core.ai.prompts import build_prompt
 
 def test_build_prompt():
     sensor_data = {
@@ -15,7 +15,7 @@ def test_build_prompt():
     print("--- FULL PROMPT END ---")
     
     # Verificaciones básicas
-    assert "AgroNexus AI Expert" in prompt
+    assert "Smart AgTech Expert" in prompt
     assert "29.5" in prompt
     assert "FAN" in prompt
     assert "JSON" in prompt

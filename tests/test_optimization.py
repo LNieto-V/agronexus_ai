@@ -1,7 +1,10 @@
 import asyncio
 import httpx
 import json
+import pytest
+from app.core.ai.llm import generate_raw_response
 
+@pytest.mark.asyncio
 async def test_optimization():
     url = "http://localhost:8000/iot/telemetry"
     

@@ -47,14 +47,21 @@ CREATE TABLE IF NOT EXISTS public.system_state (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 5. Políticas de Seguridad (RLS) - Opcional si el backend usa service_role_key
+-- 5. Políticas de Seguridad (RLS) - Vital para producción
 ALTER TABLE public.sensor_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_state ENABLE ROW LEVEL SECURITY;
 
--- Políticas ejemplo: Los usuarios solo ven sus propios datos
+-- Evitamos que usuarios no correspondientes accedan
 CREATE POLICY "Users can view their own sensor data" ON public.sensor_data FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own sensor data" ON public.sensor_data FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Users can view their own chat history" ON public.chat_history FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own chat history" ON public.chat_history FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Users can view their own api keys" ON public.api_keys FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can view their own system state" ON public.system_state FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own api keys" ON public.api_keys FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own api keys" ON public.api_keys FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view and edit their own system state" ON public.system_state FOR ALL USING (auth.uid() = user_id);

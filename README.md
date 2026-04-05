@@ -5,113 +5,115 @@
 [![Supabase](https://img.shields.io/badge/Supabase-DB%20%26%20Auth-3ecf8e?logo=supabase)](https://supabase.com/)
 [![Gemini](https://img.shields.io/badge/Gemini-2.1--Flash-4285F4?logo=google-gemini)](https://ai.google.dev/)
 
-AgroNexus AI es un asistente agrícola inteligente diseñado específicamente para zonas de transición costera (como Santa Marta, Colombia). Este backend gestiona telemetría en tiempo real desde dispositivos IoT (ESP32), orquesta decisiones proactivas para el control de invernaderos y ofrece una interfaz conversacional impulsada por la IA de Google Gemini con memoria persistente.
+AgroNexus AI es un backend inteligente, orquestado y asíncrono para gestionar invernaderos de precisión. Su motor central está basado en FastAPI y cuenta con la IA de **Google Gemini** impulsada por un módulo **RAG Dinámico**. Está optimizado para tomar decisiones proactivas sobre telemetría IoT de dispositivos ESP32, asegurando despliegues Serverless veloces y altamente escalables.
+
+## 🏗️ Arquitectura del Sistema
+
+El flujo completo del backend interactúa con múltiples actores (ESP32, Frontend, Supabase, Gemini):
+
+```mermaid
+graph TD
+    A[Dispositivo ESP32] -->|Telemetría IoT + API Key| B(FastAPI Backend)
+    C[Frontend / Móvil] -->|Chat + JWT| B
+    B -->|Persistencia| D[(Supabase PostgreSQL)]
+    B -->|Contexto RAG + Prompts| E[Agente IA Gemini]
+    E -->|Decisiones & Mensajes| B
+    B -->|Alertas y Control| A
+    B -->|Respuestas Chat| C
+```
+
+**Principios de Arquitectura:**
+- **Inyección RAG Dinámica:** Los fragmentos de contexto (`crops.md`, `climate.md`, etc.) se inyectan en base a intención, reduciendo drásticamente el costo de tokens.
+- **Memoria de Contexto Comprimida:** (Sliding Window Compression).
+- **Asincronía Total:** Orquestación veloz mediante `asyncio`.
+- **Stateless Serverless:** Persistencia delegada a Supabase para ser compatible con AWS Lambda / Vercel Functions.
 
 ---
 
-## ⚡ Características Principales
+## 🛠️ Instalación Paso a Paso
 
-- **Arquitectura 100% Asíncrona (Non-Blocking)**: Orquestación optimizada con `asyncio.gather` para integraciones simultáneas con base de datos, memoria y LLM, diseñada para entornos Serverless de alta concurrencia.
-- **Orquestación IoT**: Recepción de telemetría y control de actuadores (Ventiladores, Luces, Riego) mediante lógica de anomalías.
-- **Seguridad Dual Limitada**:
-  - **JWT (Supabase)**: Para usuarios finales en aplicaciones Web/Móviles.
-  - **API Keys (SHA-256)**: Para dispositivos embebidos con permisos `read` y `write`.
-- **IA Experta Proactiva**: Personalidad *AgTech SaaS* basada en Gemini 1.5/2.1 Flash con "Tono Espejo": respuestas breves a comandos, y explicaciones arquitectónicas profundas ante consultas técnicas.
-- **RAG Simplificado y Persistente**: Inyección de conocimiento agrícola costero y estado del sistema en tiempo real.
-- **Persistencia Distribuida**: Historial de chat, lectura de sensores y **Estado del Sistema** (System State) almacenados nativamente en Supabase, superando las limitaciones efímeras de Vercel/RAM.
+1. **Clonar e Ingresar al Proyecto**
+   ```bash
+   git clone https://github.com/LNieto-V/agronexus_ai.git
+   cd agronexus_ai
+   ```
+
+2. **Instalar Dependencias** (Se recomienda `uv` para mayor velocidad, o `pip`)
+   ```bash
+   uv sync
+   # O alternativamente: pip install -r requirements.txt
+   ```
+
+3. **Configurar el Entorno**
+   ```bash
+   cp .env.example .env
+   ```
+   Rellena `.env` con tus claves de Gemini y Supabase.
+
+4. **Variables de Entorno (`.env`)**
+   | Variable | Descripción |
+   |----------|-------------|
+   | `GEMINI_API_KEY` | Clave de Google AI Studio |
+   | `SUPABASE_URL` | URL del proyecto Supabase (https://xyz.supabase.co) |
+   | `SUPABASE_KEY` | Public Anon Key de Supabase |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Secret Key para backend (bypass RLS) |
+   | `SUPABASE_JWT_SECRET` | Para autenticar a los usuarios del frontend |
+
+5. **Acelerar el Servidor**
+   ```bash
+   uv run uvicorn app.main:app --reload
+   ```
 
 ---
 
-## 🛠️ Instalación y Configuración
+## 🗄️ Configuración de Base de Datos (Supabase)
 
-### 1. Requisitos Previos
-- **Python 3.12+**
-- El gestor de paquetes `uv` (recomendado) para mejor rendimiento.
+Debes ejecutar el archivo **`schema.sql`** en la consola SQL de tu proyecto Supabase.
+Las tablas que se crearán son obligatorias para el circuito asíncrono y los bloqueos RLS:
 
-### 2. Clonar y despliegue local
+- `sensor_data`: Para todo el flujo de IoT (Lecturas físicas).
+- `chat_history`: Para persistir las alucinaciones limitadas del Agente y su memoria.
+- `api_keys`: Hardware auth por SHA-256.
+- `system_state`: Estado de modos automáticos y manuales.
+
+*(El RLS limitará la visualización de los datos únicamente a los dueños `auth.uid() = user_id`).*
+
+---
+
+## 📡 Endpoints: Ejemplo de Uso
+
+### Interfaz del Asistente (Chat)
+Endpoint protegido para chatear con Gemini. Requiere un Bearer token.
 ```bash
-# Clonar el repo
-git clone https://github.com/LNieto-V/agronexus_ai
-cd agronexus_ai
-
-# Instalar dependencias con uv
-uv sync
-
-# Ejecutar servidor de desarrollo
-uv run uvicorn app.main:app --reload
+curl -X POST http://localhost:8000/chat \
+  -H "Authorization: Bearer TU_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "¿Cómo está mi clima hoy y activo el riego?"}'
 ```
 
-### 3. Configuración de Variables de Entorno `.env`
-Crea un archivo `.env` basado en el `.env.example`:
-```env
-GEMINI_API_KEY=tu_api_key
-SUPABASE_URL=tu_url_proyecto
-SUPABASE_KEY=tu_anon_key
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
-SUPABASE_JWT_SECRET=tu_jwt_secret
-```
-
----
-
-## 📡 Documentación de Endpoints (API)
-
-Accede a la documentación interactiva en:
-- `http://localhost:8000/docs` (Swagger UI)
-- `https://agronexus-ai.vercel.app/docs` (Producción)
-
-### Endpoints Críticos
-- `POST /chat`: Interfaz conversacional con el asistente (Requiere JWT).
-- `POST /chat/test`: **Endpoint de Evaluación**. Nodo de prueba público sin autenticación para revisar el despliegue del proyecto y la personalidad de la IA.
-- `POST /iot/telemetry`: Consumo de datos desde ESP32 (Requiere API Key `write`).
-- `GET /dashboard/latest`: Últimos valores de sensores (Requiere JWT).
-- `POST /auth/keys`: Gestión de API Keys para dispositivos (Requiere JWT).
-
----
-
-## 🗄️ Estructura de la Base de Datos
-
-Para desplegar este backend necesitas crear las siguientes tablas en tu instancia de Supabase:
-
-1.  `sensor_data`: Registra la telemetría histórica.
-2.  `chat_history`: Almacena la memoria conversacional.
-3.  `api_keys`: Gestiona las llaves de acceso para hardware IoT.
-4.  `system_state`: Persistencia del estado global (modos, mantenimientos) para entornos Serverless libres de RAM.
-
-> [!TIP]
-> Consulta el archivo `supabase_schema.sql` para ver la definición exacta de las tablas e índices.
-
----
-
-## 🧪 Pruebas y Validación (QA)
-El proyecto incluye una suite exhaustiva de pruebas en el directorio `/tests` para validar la estabilidad de la arquitectura, conectividad asíncrona y seguridad criptográfica:
+### Nodo de Prueba (/chat/test)
+Diseñado para la evaluación de la rúbrica y validación de prompts. No requiere Bearer Token.
 ```bash
-uv run python tests/test_connection.py     # Base de datos
-uv run python tests/test_iot_telemetry.py  # Endpoints y API Keys
-uv run python tests/test_supabase.py       # Servicios de Persistencia
+curl -X POST http://localhost:8000/chat/test \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Dime cómo está estructurado tu backend y qué stack usas."}'
 ```
-Para probar la identidad y profundidad técnica del asistente en vivo:
+
+### Telemetría de Dispositivos (ESP32)
+Simula el ESP32 enviando temperatura y humedad. Requiere la API key autogenerada por el User.
 ```bash
-curl -X POST http://localhost:8000/chat/test -H "Content-Type: application/json" -d '{"message": "¿Qué arquitectura manejas y cuál es tu stack?"}'
+curl -X POST http://localhost:8000/iot/telemetry \
+  -H "X-API-Key: hw_key_example123" \
+  -H "Content-Type: application/json" \
+  -d '{"temperature": 28.5, "humidity": 65.0, "light": 800, "ph": 6.2, "ec": 1.5}'
 ```
 
 ---
 
-## 📂 Estructura del Proyecto (Nueva Arquitectura)
+## 🧠 Flujo de la IA y Prompting Eficiente (RAG)
 
-- **`app/api/`**: Capa de transporte (FastAPI).
-  - `routes/`: Endpoints modulares (chat, iot, auth, etc.).
-  - `deps.py`: Inyección de dependencias centralizada.
-- **`app/core/`**: Núcleo del sistema.
-  - `ai/`: Lógica de LLM (Gemini) y gestión de prompts.
-  - `config.py`: Configuración global y variables de entorno.
-  - `security.py`: Gestión de JWT y API Keys.
-- **`app/services/`**: Capa de negocio y persistencia.
-  - `iot_service.py`: Orquestador de flujos IoT/IA.
-  - `supabase_service.py`: Adaptador para base de datos.
-  - `parser_service.py`: Utilidades de extracción de datos.
-- **`tests/`**: Suite de pruebas y validación.
+El bot de AgroNexus no utiliza la misma ventana de contexto pesada siempre. Se divide en:
 
----
-
-## 🛡️ Estándares del Proyecto
-Este backend sigue el estándar de la Universidad del Magdalena para el curso de Herramientas de Desarrollo con IA, implementando la estructura de **Skills** definida en `.agent/skills/`.
+1. **Jerarquía del Prompt:** Se inyectan primero las *Reglas estrictas* (`rules.md`), luego el *Estado en tiempo real* (IoT), luego la *Memoria comprimida* (Supabase).
+2. **Dynamic Knowledge (RAG segmentado):** La base de conocimiento se evaluó dinámicamente. Si mencionas "tomate", inyecta `crops.md`. Si mencionas "riego", inyecta `irrigation.md`. Esto **reduce el costo de la API** al no enviar grandes librerías estáticas en cada request.
+3. **Manejo de Tokens:** Ampliado a `4096 tokens` bajo el nuevo modelo con resiliencia de Errores `429` (Quota Exhausted). 
