@@ -80,11 +80,28 @@ Para desplegar este backend necesitas crear las siguientes tablas en tu instanci
 ---
 
 ## 🧪 Pruebas
-El proyecto incluye una suite de pruebas para validar la conexión con Gemini, el procesamiento de telemetría y la seguridad:
+El proyecto incluye una suite de pruebas en el directorio `/tests` para validar el sistema:
 ```bash
-uv run python test_connection.py
-uv run python test_iot_telemetry.py
+uv run python tests/test_connection.py
+uv run python tests/test_iot_telemetry.py
 ```
+
+---
+
+## 📂 Estructura del Proyecto (Nueva Arquitectura)
+
+- **`app/api/`**: Capa de transporte (FastAPI).
+  - `routes/`: Endpoints modulares (chat, iot, auth, etc.).
+  - `deps.py`: Inyección de dependencias centralizada.
+- **`app/core/`**: Núcleo del sistema.
+  - `ai/`: Lógica de LLM (Gemini) y gestión de prompts.
+  - `config.py`: Configuración global y variables de entorno.
+  - `security.py`: Gestión de JWT y API Keys.
+- **`app/services/`**: Capa de negocio y persistencia.
+  - `iot_service.py`: Orquestador de flujos IoT/IA.
+  - `supabase_service.py`: Adaptador para base de datos.
+  - `parser_service.py`: Utilidades de extracción de datos.
+- **`tests/`**: Suite de pruebas y validación.
 
 ---
 

@@ -1,8 +1,9 @@
 from pathlib import Path
 from functools import lru_cache
 from typing import Dict, Any
+from app.core.config import settings
 
-AI_DIR = Path(__file__).parent.parent / ".agent" / "skills" / "backend-fastapi-iot"
+AI_DIR = Path(settings.BASE_DIR) / ".agent" / "skills" / "backend-fastapi-iot"
 
 @lru_cache()
 def load_prompt_file(filename: str) -> str:

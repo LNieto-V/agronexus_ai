@@ -1,5 +1,5 @@
 from supabase import create_client, Client
-from app.config import settings
+from app.core.config import settings
 import asyncio
 import logging
 
@@ -95,7 +95,7 @@ class SupabaseService:
             logger.error(f"Error guardando chat: {e}")
 
     async def get_chat_history(self, user_id: str, limit: int = 6) -> str:
-        """Recupera el contexto del chat asíncronamente."""
+        """Recupera el contexto del chat asíncronamente (formateado para prompt)."""
         if not self.client: 
             return ""
         try:
@@ -122,5 +122,70 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Error en chat history: {e}")
             return ""
+
+    async def get_chat_history_raw(self, user_id: str, limit: int = 50) -> list:
+        """Recupera el historial de chat crudo para la UI."""
+        if not self.client:
+            return []
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.client.table("chat_history") \
+                            .select("*") \
+                            .eq("user_id", user_id) \
+                            .order("created_at", desc=False) \
+                            .limit(limit) \
+                            .execute()
+            )
+            return response.data
+        except Exception as e:
+            logger.error(f"Error en chat history raw: {e}")
+            return []
+
+    async def get_api_keys(self, user_id: str) -> list:
+        """Obtiene las llaves API del usuario."""
+        if not self.client:
+            return []
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: self.client.table("api_keys").select("*").eq("user_id", user_id).execute()
+            )
+            return res.data
+        except Exception as e:
+            logger.error(f"Error obteniendo llaves: {e}")
+            return []
+
+    async def upsert_api_key(self, key_data: dict) -> dict:
+        """Crea o actualiza una llave API."""
+        if not self.client:
+            return {}
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: self.client.table("api_keys").upsert(key_data).execute()
+            )
+            return res.data[0] if res.data else {}
+        except Exception as e:
+            logger.error(f"Error upserting key: {e}")
+            return {}
+
+    async def delete_api_key(self, user_id: str, key_type: str) -> bool:
+        """Borra una llave API específica."""
+        if not self.client:
+            return False
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.client.table("api_keys").delete().eq("user_id", user_id).eq("key_type", key_type).execute()
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error eliminando llave: {e}")
+            return False
 
 supabase_db = SupabaseService()

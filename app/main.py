@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import chat, system, iot, dashboard, auth
+from app.api.routes import chat, system, iot, dashboard, auth
 import logging
 
 # Configuración de logging
