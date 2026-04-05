@@ -61,28 +61,49 @@ async def chat_test(request: ChatRequest) -> ChatResponse:
     sin necesidad de un JWT de Supabase válido.
     """
     try:
-        # Para el test, usamos un flujo directo sin persistencia en DB para evitar errores de FK
         from app.llm import generate_raw_response
         from app.prompts import build_prompt
         from app.services.iot_service import extract_iot_data
+        from app.services.supabase_service import supabase_db
+        from app.services.state_service import backend_state
         
-        # Contexto simulado para el test
+        # 1. Obtener contexto real si está disponible
+        current_state = backend_state.get_state()
+        
+        # Intentar obtener los últimos datos globales de sensores (sin usuario específico) para realismo
+        sensor_data = {"temperature": 30.5, "humidity": 75.2, "ph": 6.5}
+        try:
+            if supabase_db.client:
+                res = supabase_db.client.table("sensor_data").select("*").order("created_at", desc=True).limit(1).execute()
+                if res.data:
+                    db_data = res.data[0]
+                    sensor_data = {
+                        "temperature": db_data.get("temperature", 30.5),
+                        "humidity": db_data.get("humidity", 75.2),
+                        "ph": db_data.get("ph", 6.5)
+                    }
+        except:
+            pass # Usar mock si la DB falla
+
+        # 2. Construir prompt completo
         full_prompt = build_prompt(
             message=request.message,
-            sensor_data={"temperature": 30.5, "humidity": 75.2, "ph": 6.5},
-            history="[DATOS DE PRUEBA: Modo Evaluación]",
-            backend_state={"mode": "AUTO", "alerts": ["SISTEMA_EN_PRUEBA"]},
-            chat_history="MODO: Evaluación de primer entregable."
+            sensor_data=sensor_data,
+            history="[MODO EVALUACIÓN: Datos Históricos Simulados]",
+            backend_state=current_state,
+            chat_history="ENTORNO: Nodo de prueba público (Evaluación de Proyecto)."
         )
         
+        # 3. Consultar IA y extraer datos
         raw_text = await generate_raw_response(full_prompt)
         text, actions, alerts = extract_iot_data(raw_text)
         
         return ChatResponse(
-            response=f"[MODO TEST] {text}",
+            response=text, # Eliminado prefijo [MODO TEST] para simetría con el real
             actions=actions,
             alerts=alerts
         )
     except Exception as e:
         logger.error(f"Error en chat test: {e}")
         raise HTTPException(status_code=500, detail="Error en el nodo de prueba de la IA.")
+

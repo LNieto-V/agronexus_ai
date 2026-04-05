@@ -34,4 +34,8 @@ Este skill permite al agente entender y operar sobre el corazón del ecosistema 
 ## Estructura del Skill
 - `app/routers/`: Endpoints modulares.
 - `app/services/`: Lógica de negocio (IoT, Security, Supabase).
-- `ai/`: Base de conocimiento y reglas del agente en Markdown.
+- `Context Files (Prompting)`: Archivos integrados en este directorio:
+    - `prompt.md`: Definición del rol y tono.
+    - `rules.md`: Reglas de seguridad y formato JSON.
+    - `knowledge.md`: Base de conocimientos agrícolas.
+    - `devices.md`: Protocolos de dispositivos IoT.

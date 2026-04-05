@@ -105,26 +105,37 @@ def extract_iot_data(text: str) -> Tuple[str, List[dict], List[str]]:
     """
     actions = []
     alerts = []
+    clean_text = text
     
-    # Extraer bloque JSON usando regex (formato markdown)
-    json_match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
-    if not json_match:
-        # Intentar buscar sin los delimitadores de markdown
-        json_match = re.search(r"(\{.*\"actions\".*\})", text, re.DOTALL)
-        
-    if json_match:
-        try:
-            data = json.loads(json_match.group(1))
-            actions = data.get("actions", [])
-            alerts = data.get("alerts", [])
-            
-            # Remover el bloque JSON del texto original para dejar solo el mensaje humano
-            # Esto es más seguro que un split si la IA escribe algo después
-            clean_text = text.replace(json_match.group(0), "").strip()
-        except Exception as e:
-            logger.warning(f"Error parseando JSON de respuesta: {e}")
-            clean_text = text
-    else:
-        clean_text = text
+    # 1. Buscar bloques de código JSON (```json ... ``` o ``` ...)
+    # Buscamos el patrón JSON estructurado con alertas y acciones
+    json_patterns = [
+        r"```json\s*(\{.*?\})\s*```",
+        r"```\s*(\{.*?\})\s*```",
+        r"(\{.*\"actions\".*?\})" # Fallback para JSON plano sin bloques
+    ]
+    
+    found_json = None
+    full_match_text = None
 
+    for pattern in json_patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            # Intentar parsear el JSON capturado
+            try:
+                candidate = match.group(1)
+                data = json.loads(candidate)
+                if "actions" in data or "alerts" in data:
+                    found_json = data
+                    full_match_text = match.group(0)
+                    break
+            except:
+                continue
+
+    if found_json:
+        actions = found_json.get("actions", [])
+        alerts = found_json.get("alerts", [])
+        # Limpiar el texto removiendo el bloque JSON
+        clean_text = text.replace(full_match_text, "").strip()
+        
     return clean_text, actions, alerts

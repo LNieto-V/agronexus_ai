@@ -2,7 +2,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Dict, Any
 
-AI_DIR = Path(__file__).parent.parent / "ai"
+AI_DIR = Path(__file__).parent.parent / ".agent" / "skills" / "backend-fastapi-iot"
 
 @lru_cache()
 def load_prompt_file(filename: str) -> str:
