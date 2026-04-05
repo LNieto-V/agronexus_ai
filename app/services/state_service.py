@@ -21,5 +21,18 @@ class StateService:
         """Updates a state key."""
         self._state[key] = value
 
+    @property
+    def system_mode(self) -> str:
+        """Returns the current system mode."""
+        return self._state.get("system_mode", "AUTO")
+
+    def update_mode(self, mode: str) -> bool:
+        """Updates the system mode (AUTO or MANUAL)."""
+        valid_modes = ["AUTO", "MANUAL"]
+        if mode.upper() in valid_modes:
+            self._state["system_mode"] = mode.upper()
+            return True
+        return False
+
 # Singleton para el estado del servidor
 backend_state = StateService()
