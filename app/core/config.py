@@ -4,6 +4,7 @@ from pathlib import Path
 class Settings(BaseSettings):
     BASE_DIR: str = str(Path(__file__).resolve().parents[2])
     GEMINI_API_KEY: str = ""
+    GEMINI_API_KEYS: str = "" # Formato: "key1,key2,key3"
     SUPABASE_URL: str = "your_project_url"
     SUPABASE_KEY: str = "your_anon_key"
     SUPABASE_SERVICE_ROLE_KEY: str = "your_service_role_key"
