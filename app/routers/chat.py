@@ -82,7 +82,7 @@ async def chat_test(request: ChatRequest) -> ChatResponse:
                         "humidity": db_data.get("humidity", 75.2),
                         "ph": db_data.get("ph", 6.5)
                     }
-        except:
+        except Exception:
             pass # Usar mock si la DB falla
 
         # 2. Construir prompt completo

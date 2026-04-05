@@ -129,7 +129,7 @@ def extract_iot_data(text: str) -> Tuple[str, List[dict], List[str]]:
                     found_json = data
                     full_match_text = match.group(0)
                     break
-            except:
+            except Exception:
                 continue
 
     if found_json:
