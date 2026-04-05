@@ -1,119 +1,132 @@
-# 🚜 AgroNexus AI: Backend de Agricultura de Precisión IoT
+# 🚜 AgroNexus AI: Backend de Agricultura de Precision IoT
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.135%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-DB%20%26%20Auth-3ecf8e?logo=supabase)](https://supabase.com/)
 [![Gemini](https://img.shields.io/badge/Gemini-2.1--Flash-4285F4?logo=google-gemini)](https://ai.google.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-AgroNexus AI es un backend inteligente, orquestado y asíncrono para gestionar invernaderos de precisión. Su motor central está basado en FastAPI y cuenta con la IA de **Google Gemini** impulsada por un módulo **RAG Dinámico**. Está optimizado para tomar decisiones proactivas sobre telemetría IoT de dispositivos ESP32, asegurando despliegues Serverless veloces y altamente escalables.
+**AgroNexus AI** es un backend inteligente, orquestado y asíncrono diseñado para la gestión de invernaderos de alta precisión. Impulsado por **FastAPI** y **Google Gemini**, el sistema actúa como el cerebro proactivo de la operación agrícola, procesando telemetría IoT desde equipos ESP32 y ofreciendo asesoría experta mediante un motor **RAG Dinámico** de alto rendimiento.
 
-## 🏗️ Arquitectura del Sistema
+---
 
-El flujo completo del backend interactúa con múltiples actores (ESP32, Frontend, Supabase, Gemini):
+## 🏗️ Arquitectura e Infraestructura
+
+El sistema utiliza un modelo de orquestación asíncrona para manejar múltiples flujos de datos en paralelo sin bloqueos de E/S.
 
 ```mermaid
 graph TD
-    A[Dispositivo ESP32] -->|Telemetría IoT + API Key| B(FastAPI Backend)
+    A[Dispositivos ESP32] -->|Telemetría IoT + API Key| B(FastAPI Backend)
     C[Frontend / Móvil] -->|Chat + JWT| B
-    B -->|Persistencia| D[(Supabase PostgreSQL)]
-    B -->|Contexto RAG + Prompts| E[Agente IA Gemini]
-    E -->|Decisiones & Mensajes| B
-    B -->|Alertas y Control| A
-    B -->|Respuestas Chat| C
+    B -->|Persistencia & RLS| D[(Supabase PostgreSQL)]
+    B -->|Modular Prompts + IoT Context| E[Agente IA Gemini]
+    E -->|Decisiones & Control| B
+    B -->|Alertas Hardware| A
+    B -->|Stream de Conversación| C
 ```
 
-**Principios de Arquitectura:**
-- **Inyección RAG Dinámica:** Los fragmentos de contexto (`crops.md`, `climate.md`, etc.) se inyectan en base a intención, reduciendo drásticamente el costo de tokens.
-- **Memoria de Contexto Comprimida:** (Sliding Window Compression).
-- **Asincronía Total:** Orquestación veloz mediante `asyncio`.
-- **Stateless Serverless:** Persistencia delegada a Supabase para ser compatible con AWS Lambda / Vercel Functions.
+### 📂 Estructura del Proyecto
+```text
+agronexus_ai/
+├── app/
+│   ├── api/            # Rutas y Endpoints (v1)
+│   ├── core/           # Configuración, Seguridad y Lógica de Prompts (AI)
+│   ├── models/         # Esquemas Pydantic para APIs
+│   ├── repositories/   # Capa de Acceso a Datos (Supabase Integration)
+│   └── services/       # Lógica de Negocio (IoT, IA Orchestration)
+├── .agent/             # Cerebro de la IA (Skills, Reglas, Contexto)
+├── schema.sql          # Esquema de Base de Datos PostgreSQL
+├── requirements.txt    # Dependencias del sistema
+└── .env                # Variables de entorno secretas
+```
 
 ---
 
-## 🛠️ Instalación Paso a Paso
+## 🚀 Instalación y Despliegue
 
-1. **Clonar e Ingresar al Proyecto**
-   ```bash
-   git clone https://github.com/LNieto-V/agronexus_ai.git
-   cd agronexus_ai
-   ```
+### 1. Requisitos Previos
+*   **Python 3.12+**
+*   **UV** (Recomendado para gestión de paquetes ultra-rápida) o `pip`.
+*   Cuenta de **Google AI Studio** (Gemini API).
+*   Proyecto en **Supabase** (PostgreSQL + Auth).
 
-2. **Instalar Dependencias** (Se recomienda `uv` para mayor velocidad, o `pip`)
-   ```bash
-   uv sync
-   # O alternativamente: pip install -r requirements.txt
-   ```
-
-3. **Configurar el Entorno**
-   ```bash
-   cp .env.example .env
-   ```
-   Rellena `.env` con tus claves de Gemini y Supabase.
-
-4. **Variables de Entorno (`.env`)**
-   | Variable | Descripción |
-   |----------|-------------|
-   | `GEMINI_API_KEY` | Clave de Google AI Studio |
-   | `SUPABASE_URL` | URL del proyecto Supabase (https://xyz.supabase.co) |
-   | `SUPABASE_KEY` | Public Anon Key de Supabase |
-   | `SUPABASE_SERVICE_ROLE_KEY` | Secret Key para backend (bypass RLS) |
-   | `SUPABASE_JWT_SECRET` | Para autenticar a los usuarios del frontend |
-
-5. **Acelerar el Servidor**
-   ```bash
-   uv run uvicorn app.main:app --reload
-   ```
-
----
-
-## 🗄️ Configuración de Base de Datos (Supabase)
-
-Debes ejecutar el archivo **`schema.sql`** en la consola SQL de tu proyecto Supabase.
-Las tablas que se crearán son obligatorias para el circuito asíncrono y los bloqueos RLS:
-
-- `sensor_data`: Para todo el flujo de IoT (Lecturas físicas).
-- `chat_history`: Para persistir las alucinaciones limitadas del Agente y su memoria.
-- `api_keys`: Hardware auth por SHA-256.
-- `system_state`: Estado de modos automáticos y manuales.
-
-*(El RLS limitará la visualización de los datos únicamente a los dueños `auth.uid() = user_id`).*
-
----
-
-## 📡 Endpoints: Ejemplo de Uso
-
-### Interfaz del Asistente (Chat)
-Endpoint protegido para chatear con Gemini. Requiere un Bearer token.
+### 2. Configuración Rápida
 ```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Authorization: Bearer TU_JWT" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "¿Cómo está mi clima hoy y activo el riego?"}'
+# Sincronizar entorno y dependencias
+uv sync
+
+# Configurar variables
+cp .env.example .env
 ```
 
-### Nodo de Prueba (/chat/test)
-Diseñado para la evaluación de la rúbrica y validación de prompts. No requiere Bearer Token.
-```bash
-curl -X POST http://localhost:8000/chat/test \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Dime cómo está estructurado tu backend y qué stack usas."}'
-```
+| Variable | Descripción |
+|----------|-------------|
+| `GEMINI_API_KEY` | Clave de Google AI Studio. |
+| `SUPABASE_URL` | URL de tu proyecto Supabase. |
+| `SUPABASE_KEY` | Public Anon Key. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret Key (Necesaria para bypass RLS en el backend). |
+| `SUPABASE_JWT_SECRET` | Secreto para validación de tokens de usuario. |
 
-### Telemetría de Dispositivos (ESP32)
-Simula el ESP32 enviando temperatura y humedad. Requiere la API key autogenerada por el User.
+### 3. Iniciar el Motor
 ```bash
-curl -X POST http://localhost:8000/iot/telemetry \
-  -H "X-API-Key: hw_key_example123" \
-  -H "Content-Type: application/json" \
-  -d '{"temperature": 28.5, "humidity": 65.0, "light": 800, "ph": 6.2, "ec": 1.5}'
+uv run uvicorn app.main:app --reload
 ```
 
 ---
 
-## 🧠 Flujo de la IA y Prompting Eficiente (RAG)
+## 💬 Sistema de Chat Multi-Sesión (Conversations)
 
-El bot de AgroNexus no utiliza la misma ventana de contexto pesada siempre. Se divide en:
+A diferencia de un chat global, AgroNexus implementa hilos de conversación aislados que permiten mantener el contexto RAG específico para cada tópico o invernadero.
 
-1. **Jerarquía del Prompt:** Se inyectan primero las *Reglas estrictas* (`rules.md`), luego el *Estado en tiempo real* (IoT), luego la *Memoria comprimida* (Supabase).
-2. **Dynamic Knowledge (RAG segmentado):** La base de conocimiento se evaluó dinámicamente. Si mencionas "tomate", inyecta `crops.md`. Si mencionas "riego", inyecta `irrigation.md`. Esto **reduce el costo de la API** al no enviar grandes librerías estáticas en cada request.
-3. **Manejo de Tokens:** Ampliado a `4096 tokens` bajo el nuevo modelo con resiliencia de Errores `429` (Quota Exhausted). 
+*   **Identificación por `session_id`**: Cada conversación en la tabla `conversations` agrupa mensajes en `chat_history`.
+*   **Aislamiento de Memoria**: La IA solo consume el historial de la sesión activa para evitar "alucinaciones" cruzadas.
+*   **Chat Global**: Si no se provee `session_id`, el sistema opera en un modo de chat general.
+
+### Endpoints Principales:
+- `GET /conversations`: Lista todas las sesiones del usuario activo.
+- `POST /conversations`: Inicia un nuevo hilo de chat.
+- `PATCH /conversations/{id}`: Renombra el título del chat.
+- `POST /chat`: Envía un mensaje (soporta `session_id` opcional).
+
+---
+
+## 🔒 Seguridad Híbrida y RLS
+
+Implementamos un modelo de seguridad de "Confianza Cero" para proteger tanto a los usuarios como al hardware físico.
+
+1.  **Autenticación de Usuarios (JWT)**: Todos los endpoints `v1` para la APP requieren un Bearer Token validado contra el `SUPABASE_JWT_SECRET`.
+2.  **Autenticación IoT (API Keys)**: Los ESP32 utilizan llaves SHA-256 almacenadas en la base de datos.
+    -   `POST /auth/keys`: Genera llaves maestras con permisos de solo lectura o escritura.
+3.  **Row Level Security (RLS)**: Cada fila en PostgreSQL está protegida por políticas de usuario (`auth.uid() = user_id`), asegurando que ningún usuario pueda acceder a datos de sensor o chats ajenos.
+
+---
+
+## 🧠 Inteligencia Artificial Modular (RAG Dinámico)
+
+El Agente **no** carga todo el conocimiento en cada request. Utiliza una inyección modular basada en el contenido de `.agent/skills/`:
+
+*   **`prompt.md`**: Define la personalidad experta en AgTech y el ADN técnico del sistema.
+*   **`rules.md`**: Reglas estrictas de seguridad (no mencionar keys) y formato obligatorio de salida (JSON para control de actuadores).
+*   **`devices.md`**: Inventario actualizado de hardware (FAN, LIGHT, IRRIGATION) que el bot puede manipular.
+
+---
+
+## 🛠️ Guía de Troubleshooting (FAQ)
+
+> [!WARNING]
+> **Error `PGRST205` o 404 en /conversations**: Esto indica que la tabla no existe en Supabase. Asegúrate de haber ejecutado **todo** el contenido de `schema.sql` en tu SQL Editor.
+
+> [!CAUTION]
+> **Error 401 (Invalid Token)**: Verifica que el `SUPABASE_JWT_SECRET` en tu `.env` coincida exactamente con el de la pestaña *API Settings* en Supabase.
+
+> [!TIP]
+> **Lentitud en Respuestas**: El sistema es asíncrono, pero Gemini tiene cuotas. Si recibes errores `429`, revisa el uso del API Key en Google AI Studio.
+
+---
+
+## 🤝 Contribuciones y Desarrollo
+
+Para reportar bugs o solicitar nuevas integraciones de hardware (sensores de EC, CO2, etc.), por favor abre un **Issue** o envía un **Pull Request**.
+
+---
+*Desarrollado con ❤️ para el futuro de la agricultura sostenible por el equipo de AgroNexus.*
