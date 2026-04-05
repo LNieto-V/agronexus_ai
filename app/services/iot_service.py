@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 import logging
 from typing import Tuple, List, Dict, Any
 from app.services.supabase_service import supabase_db
@@ -11,19 +12,20 @@ logger = logging.getLogger(__name__)
 
 async def process_chatbot_request(message: str, user_id: str) -> Tuple[str, List[dict], List[str]]:
     """
-    Orquesta el flujo completo de una solicitud del usuario humano:
-    1. Obtiene contexto histórico, de estado y LOS ÚLTIMOS DATOS DE SENSORES.
-    2. Construye el prompt enriquecido.
-    3. Llama al LLM.
-    4. Extrae y formatea la respuesta IoT.
+    Orquesta el flujo completo con procesamiento paralelo (asyncio.gather).
     """
-    # 1. Obtener contexto externo (filtrado por usuario)
-    chat_history = supabase_db.get_chat_history(user_id)
-    history = supabase_db.get_sensor_history(user_id)
-    current_state = backend_state.get_state()
-    latest_sensors = supabase_db.get_latest_sensors(user_id)
+    # 1. Obtener contexto externo en PARALELO (Optimización Crítica de Rendimiento)
+    chat_history_task = supabase_db.get_chat_history(user_id)
+    history_task = supabase_db.get_sensor_history(user_id)
+    state_task = backend_state.get_state(user_id)
+    latest_sensors_task = supabase_db.get_latest_sensors(user_id)
+
+    # Disparar todas las peticiones a la vez
+    chat_history, history, current_state, latest_sensors = await asyncio.gather(
+        chat_history_task, history_task, state_task, latest_sensors_task
+    )
     
-    # 2. Construir prompt usando los últimos datos automáticos
+    # 2. Construir prompt enriquecido
     full_prompt = build_prompt(
         message=message, 
         sensor_data=latest_sensors,
@@ -32,41 +34,35 @@ async def process_chatbot_request(message: str, user_id: str) -> Tuple[str, List
         chat_history=chat_history
     )
 
-    # 3. Obtener respuesta del LLM
+    # 3. Obtener respuesta del LLM (Sigue siendo el cuello de botella, pero el resto es ahora instantáneo)
     raw_text = await generate_raw_response(full_prompt)
     
     # 4. Extraer datos estructurados
     clean_text, actions, alerts = extract_iot_data(raw_text)
     
-    # 5. Guardar Memoria Conversacional (Asíncrono en un hilo secundario sería ideal, aquí síncrono para simplicidad)
-    supabase_db.save_chat_message(user_id, "user", message)
-    supabase_db.save_chat_message(user_id, "ai", clean_text)
+    # 5. Guardar Memoria Conversacional (En paralelo con el retorno para no bloquear al usuario)
+    asyncio.create_task(supabase_db.save_chat_message(user_id, "user", message))
+    asyncio.create_task(supabase_db.save_chat_message(user_id, "ai", clean_text))
     
     return clean_text, actions, alerts
 
 async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str) -> Tuple[List[dict], List[str]]:
     """
-    Procesa telemetría de hardware (ESP32):
-    1. Guarda los datos en Supabase automáticamente asociados al usuario.
-    2. FILTRO: Solo consulta a la IA si hay anomalías importantes.
-    3. Retorna acciones solo cuando es crítico (Ahorra Cuota API).
+    Procesa telemetría de hardware con paralelismo y verificaciones asíncronas.
     """
-    # 1. Persistencia automática (Siempre ocurre)
-    supabase_db.insert_sensor_data(sensor_data, user_id)
+    # 1. Persistencia automática y verificación inicial
+    await supabase_db.insert_sensor_data(sensor_data, user_id)
     
-    # 2. Verificar anomalías (Umbrales de seguridad)
     if not is_anomaly(sensor_data):
-        logger.info("Datos recibidos: OK. Saltando IA para ahorrar cuota.")
-        return [], [] # Todo normal, no hay acciones ni alertas requeridas
+        return [], []
 
-    # 3. Datos anómalos encontrados -> Activar IA
-    logger.warning(f"Anomalía detectada para usuario {user_id}. Consultando a la IA...")
+    # 2. Consulta de contexto en paralelo si hay anomalía
+    history_task = supabase_db.get_sensor_history(user_id)
+    state_task = backend_state.get_state(user_id)
     
-    # Obtener contexto filtrado
-    history = supabase_db.get_sensor_history(user_id)
-    current_state = backend_state.get_state()
+    history, current_state = await asyncio.gather(history_task, state_task)
     
-    # Prompt de monitoreo técnico
+    # 3. Prompt de monitoreo técnico con IA
     full_prompt = build_prompt(
         message="SISTEMA: Monitoreo automatizado. Analiza los datos y emite acciones SOLO si hay desviaciones críticas.", 
         sensor_data=sensor_data,
@@ -74,10 +70,7 @@ async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str)
         backend_state=current_state
     )
 
-    # Llamada al LLM (Solo ocurre en anomalías)
     raw_text = await generate_raw_response(full_prompt)
-    
-    # Extraer acciones de emergencia
     _, actions, alerts = extract_iot_data(raw_text)
     return actions, alerts
 
@@ -129,7 +122,7 @@ def extract_iot_data(text: str) -> Tuple[str, List[dict], List[str]]:
                     found_json = data
                     full_match_text = match.group(0)
                     break
-            except Exception:
+            except json.JSONDecodeError:
                 continue
 
     if found_json:

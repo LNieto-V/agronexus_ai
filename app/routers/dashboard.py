@@ -38,13 +38,14 @@ async def get_history_data(user = Depends(get_current_user)):
 
 @router.get("/state")
 async def get_system_state(user = Depends(get_current_user)):
-    """Obtiene el estado interno del sistema."""
-    return backend_state.get_state()
+    """Obtiene el estado interno del sistema desde la persistencia."""
+    state = await backend_state.get_state(user["id"])
+    return state
 
 @router.post("/mode")
 async def update_system_mode(update: SystemModeUpdate, user = Depends(get_current_user)):
-    """Cambia el modo de operación (AUTO/MANUAL)."""
-    success = backend_state.update_mode(update.mode)
+    """Cambia el modo de operación de forma persistente."""
+    success = await backend_state.update_mode(user["id"], update.mode)
     if not success:
-        raise HTTPException(status_code=400, detail="Modo inválido. Use AUTO o MANUAL.")
-    return {"status": "success", "new_mode": backend_state.system_mode}
+        raise HTTPException(status_code=400, detail="Modo inválido o error en persistencia.")
+    return {"status": "success", "new_mode": update.mode.upper()}

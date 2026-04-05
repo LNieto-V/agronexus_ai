@@ -36,12 +36,25 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Políticas de Seguridad (RLS) - Opcional si el backend usa service_role_key
+-- 4. Tabla para el estado del sistema (Configuración y persistencia)
+CREATE TABLE IF NOT EXISTS public.system_state (
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    system_mode TEXT DEFAULT 'AUTO' CHECK (system_mode IN ('AUTO', 'MANUAL')),
+    pump_health FLOAT DEFAULT 1.0,
+    alerts_active JSONB DEFAULT '[]',
+    last_maintenance TIMESTAMPTZ DEFAULT now(),
+    maintenance_required BOOLEAN DEFAULT false,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 5. Políticas de Seguridad (RLS) - Opcional si el backend usa service_role_key
 ALTER TABLE public.sensor_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_state ENABLE ROW LEVEL SECURITY;
 
 -- Políticas ejemplo: Los usuarios solo ven sus propios datos
 CREATE POLICY "Users can view their own sensor data" ON public.sensor_data FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can view their own chat history" ON public.chat_history FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can view their own api keys" ON public.api_keys FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own system state" ON public.system_state FOR ALL USING (auth.uid() = user_id);

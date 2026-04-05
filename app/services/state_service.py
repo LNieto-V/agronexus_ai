@@ -1,9 +1,14 @@
 from typing import Any, Dict
+import asyncio
+import logging
+from app.services.supabase_service import supabase_db
+
+logger = logging.getLogger(__name__)
 
 class StateService:
     def __init__(self):
-        # Variables de estado locales del backend (simulando sensores o flags de sistema)
-        self._state: Dict[str, Any] = {
+        # Default state fallback
+        self._default_state = {
             "system_mode": "AUTO",
             "last_maintenance": "2026-03-25",
             "pump_health": 0.98,
@@ -11,28 +16,61 @@ class StateService:
             "maintenance_required": False
         }
 
-    def get_state(self, key: str = None):
-        """Returns the current state of a key or the full state."""
-        if key:
-            return self._state.get(key)
-        return self._state
+    async def get_state(self, user_id: str):
+        """Obtiene el estado desde Supabase (Persistente en Serverless)."""
+        if not supabase_db.client:
+            return self._default_state
+        
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, lambda: supabase_db.client.table("system_state") \
+                .select("*") \
+                .eq("user_id", user_id) \
+                .execute())
+            
+            if response.data:
+                return response.data[0]
+            
+            # Si no existe, creamos el estado inicial para el usuario
+            await self._initialize_state(user_id)
+            return self._default_state
+        except Exception as e:
+            logger.error(f"Error obteniendo sistema state: {e}")
+            return self._default_state
 
-    def set_state(self, key: str, value: Any):
-        """Updates a state key."""
-        self._state[key] = value
+    async def _initialize_state(self, user_id: str):
+        """Crea el registro inicial de estado para un nuevo usuario."""
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, 
+                lambda: supabase_db.client.table("system_state").insert({
+                    "user_id": user_id,
+                    "system_mode": "AUTO",
+                    "pump_health": 1.0,
+                    "alerts_active": []
+                }).execute()
+            )
+        except Exception:
+            pass
 
-    @property
-    def system_mode(self) -> str:
-        """Returns the current system mode."""
-        return self._state.get("system_mode", "AUTO")
-
-    def update_mode(self, mode: str) -> bool:
-        """Updates the system mode (AUTO or MANUAL)."""
-        valid_modes = ["AUTO", "MANUAL"]
-        if mode.upper() in valid_modes:
-            self._state["system_mode"] = mode.upper()
+    async def update_mode(self, user_id: str, mode: str) -> bool:
+        """Actualiza el modo en la DB."""
+        if mode.upper() not in ["AUTO", "MANUAL"]: 
+            return False
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, 
+                lambda: supabase_db.client.table("system_state") \
+                    .update({"system_mode": mode.upper()}) \
+                    .eq("user_id", user_id) \
+                    .execute()
+            )
             return True
-        return False
+        except Exception as e:
+            logger.error(f"Error actualizando modo: {e}")
+            return False
 
-# Singleton para el estado del servidor
+# Singleton
 backend_state = StateService()
