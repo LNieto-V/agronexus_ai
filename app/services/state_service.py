@@ -1,4 +1,3 @@
-from typing import Any, Dict
 import asyncio
 import logging
 from app.services.supabase_service import supabase_db

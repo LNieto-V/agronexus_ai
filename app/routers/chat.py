@@ -68,7 +68,8 @@ async def chat_test(request: ChatRequest) -> ChatResponse:
         from app.services.state_service import backend_state
         
         # 1. Obtener contexto real si está disponible
-        current_state = backend_state.get_state()
+        test_user_id = "00000000-0000-0000-0000-000000000000"
+        current_state = await backend_state.get_state(test_user_id)
         
         # Intentar obtener los últimos datos globales de sensores (sin usuario específico) para realismo
         sensor_data = {"temperature": 30.5, "humidity": 75.2, "ph": 6.5}
