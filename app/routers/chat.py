@@ -52,3 +52,37 @@ async def get_history(user = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error recuperando historial de chat: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo historial.")
+
+@router.post("/chat/test", response_model=ChatResponse)
+async def chat_test(request: ChatRequest) -> ChatResponse:
+    """
+    Endpoint de PRUEBA SIN AUTENTICACIÓN.
+    Permite a evaluadores probar la lógica del chatbot y el formato de respuesta 
+    sin necesidad de un JWT de Supabase válido.
+    """
+    try:
+        # Para el test, usamos un flujo directo sin persistencia en DB para evitar errores de FK
+        from app.llm import generate_raw_response
+        from app.prompts import build_prompt
+        from app.services.iot_service import extract_iot_data
+        
+        # Contexto simulado para el test
+        full_prompt = build_prompt(
+            message=request.message,
+            sensor_data={"temperature": 30.5, "humidity": 75.2, "ph": 6.5},
+            history="[DATOS DE PRUEBA: Modo Evaluación]",
+            backend_state={"mode": "AUTO", "alerts": ["SISTEMA_EN_PRUEBA"]},
+            chat_history="MODO: Evaluación de primer entregable."
+        )
+        
+        raw_text = await generate_raw_response(full_prompt)
+        text, actions, alerts = extract_iot_data(raw_text)
+        
+        return ChatResponse(
+            response=f"[MODO TEST] {text}",
+            actions=actions,
+            alerts=alerts
+        )
+    except Exception as e:
+        logger.error(f"Error en chat test: {e}")
+        raise HTTPException(status_code=500, detail="Error en el nodo de prueba de la IA.")
