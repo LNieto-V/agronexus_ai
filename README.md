@@ -111,6 +111,52 @@ El Agente **no** carga todo el conocimiento en cada request. Utiliza una inyecci
 
 ---
 
+---
+
+## 🧪 Testing — Transmisión de Datos IoT
+
+El directorio `tests/` incluye scripts listos para validar la capa de comunicación del backend sin necesidad de hardware físico.
+
+### Configuración
+
+Copia las variables en tu `.env` (o expórtalas en la terminal):
+
+```bash
+export AGRONEXUS_URL="http://localhost:8000"   # o tu URL de Vercel
+export AGRONEXUS_WRITE_KEY="agnx_w_..."        # POST /auth/keys?key_type=write
+export AGRONEXUS_JWT="eyJhbGc..."              # Token JWT de Supabase
+```
+
+### `tests/test_iot_bulk.py` — Transmisión masiva de sensores
+
+Envía **80 lecturas de telemetría** simuladas al endpoint `POST /iot/telemetry` usando la API Key (`agnx_w_...`). Muestra barra de progreso en tiempo real, acciones del agente IA y alertas detectadas.
+
+```bash
+python tests/test_iot_bulk.py
+```
+
+Resultado esperado:
+```
+✔ #80  T=22.8°C  H=69.7%  pH=6.6  [████████████████████████████████████████] 100% (80/80)
+Enviados: 80 | Exitosos: 80 | Fallidos: 0
+```
+
+### `tests/test_transmission.py` — Suite completa de endpoints
+
+Ejecuta 9 suites de prueba cubriendo todos los flujos del sistema: health check, chat público, conversaciones JWT, historial, dashboard, telemetría IoT y validación de seguridad.
+
+```bash
+python tests/test_transmission.py
+```
+
+| Requiere | Variable |
+|----------|----------|
+| Endpoint IoT (`/iot/telemetry`) | `AGRONEXUS_WRITE_KEY` |
+| Endpoints de usuario (`/chat`, `/conversations`) | `AGRONEXUS_JWT` |
+| Sin autenticación (`/chat/test`, `/system/health`) | — |
+
+---
+
 ## 🛠️ Guía de Troubleshooting (FAQ)
 
 > [!WARNING]
