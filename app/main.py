@@ -8,7 +8,17 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AgroNexus AI", version="0.1.0")
+app = FastAPI(
+    title="AgroNexus AI", 
+    version="0.1.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    redoc_url="/api/redoc"
+)
+
+@app.get("/api")
+async def root():
+    return {"message": "Welcome to AgroNexus API"}
 
 # Catch-All Global Exception Handler
 @app.exception_handler(Exception)
@@ -29,8 +39,8 @@ app.add_middleware(
 )
 
 # Registro de Routers
-app.include_router(system.router)
-app.include_router(chat.router)
-app.include_router(iot.router)
-app.include_router(dashboard.router)
-app.include_router(auth.router)
+app.include_router(system.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(iot.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
