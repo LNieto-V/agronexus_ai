@@ -238,7 +238,8 @@ Para garantizar que el sistema sea robusto frente a reinicios del servidor o mic
 
 1.  **Cliente Autocurativo**: El backend utiliza un patrón de *Lazy-Loading* para el cliente de Supabase. Si la conexión se pierde, el sistema intenta re-instanciar el cliente automáticamente en la siguiente petición.
 2.  **Persistencia Garantizada de Zonas**: Las zonas de cultivo se guardan en Supabase de forma síncrona durante su creación y las actualizaciones de estado (*heartbeats*) se verifican antes de retornar la respuesta al hardware.
-3.  **Auditabilidad**: Se han incluido logs detallados que permiten rastrear el flujo de datos desde el ESP32 hasta la base de datos sin exponer secretos.
+3.  **Inicialización Frontend (v2.6)**: El frontend utiliza un patrón de montaje centralizado en `TabsPage.vue` que garantiza que las zonas se recuperen de la base de datos en cada recarga de página, evitando estados vacíos en el selector superior.
+4.  **Auditabilidad**: Se han incluido logs detallados que permiten rastrear el flujo de datos desde el ESP32 hasta la base de datos sin exponer secretos.
 
 ### 📡 Ejemplo de Integración Hardware (ESP32)
 
@@ -276,57 +277,48 @@ Para conectar un dispositivo físico o simulado sin exponer llaves reales:
 > [!IMPORTANT]
 > Nunca incluyas el `SUPABASE_SERVICE_ROLE_KEY` ni llaves `agnx_w_` en el código fuente público. Usa `X-API-Key` únicamente en los headers de conexión segura (HTTPS).
 
-#### 🛠️ Firmware de Referencia (ESP32 / Arduino C++)
+#### 🛠️ Firmware de Referencia (ESP32-C6 / Arduino C++)
 
-Puedes usar este esquema base para tu firmware (requiere librería `ArduinoJson`):
+El firmware de AgroNexus para ESP32-C6 está optimizado para procesar respuestas de IA de baja latencia (soporta timeouts de 20s para el razonamiento de Gemini):
 
 ```cpp
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-// Configuración (Usa variables de entorno o un archivo secrets.h)
-const char* ssid = "TU_WIFI_SSID";
-const char* password = "TU_WIFI_PASSWORD";
-const char* serverUrl = "https://agronexus-ai.vercel.app/api/iot/telemetry";
-const char* apiKey = "agnx_w_TU_API_KEY_AQUI";
-const char* zoneId = "TU_ZONE_UUID_AQUI";
+// Pines de Actuadores (Relés)
+const int PIN_FAN = 2; 
 
 void sendTelemetry() {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(serverUrl);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("X-API-Key", apiKey);
+  HTTPClient http;
+  http.begin("http://TU_IP_LOCAL:8000/api/iot/telemetry");
+  http.addHeader("X-API-Key", "TU_WRITE_KEY");
+  http.setTimeout(20000); // Tiempo para que la IA razone
 
-    // 1. Preparar JSON de sensores
-    StaticJsonDocument<256> doc;
-    doc["zone_id"] = zoneId;
-    JsonObject sensors = doc.createNestedObject("sensor_data");
-    sensors["temperature"] = readTemp(); // Función que lee el sensor
-    sensors["humidity"] = readHum();
+  StaticJsonDocument<512> doc;
+  JsonObject sensors = doc.createNestedObject("sensor_data");
+  sensors["temperature"] = readTemp(); // Lectura real
+  doc["zone_id"] = "TU_ZONE_UUID";
 
-    String jsonStr;
-    serializeJson(doc, jsonStr);
+  String body;
+  serializeJson(doc, body);
+  int code = http.POST(body);
 
-    // 2. Enviar y procesar respuesta
-    int httpCode = http.POST(jsonStr);
-    if (httpCode == 200) {
-      String response = http.getString();
-      StaticJsonDocument<512> result;
-      deserializeJson(result, response);
-
-      // 3. Ejecutar acciones enviadas por la IA
-      JsonArray actions = result["actions"];
-      for (JsonObject action : actions) {
-        if (action["device"] == "PUMP") {
-           digitalWrite(PIN_PUMP, action["action"] == "ON" ? HIGH : LOW);
-           Serial.println("AI COMMAND: Pump " + String(action["action"].as<char*>()));
-        }
+  if (code == 200) {
+    String res = http.getString();
+    StaticJsonDocument<1024> result;
+    deserializeJson(result, res);
+    
+    // Ejecución de acciones físicas
+    JsonArray actions = result["actions"];
+    for (JsonObject a : actions) {
+      if (a["device"] == "FAN") {
+        digitalWrite(PIN_FAN, a["action"] == "ON" ? HIGH : LOW);
+        Serial.printf("[IA] %s -> %s\n", (const char*)a["device"], (const char*)a["action"]);
       }
     }
-    http.end();
   }
+  http.end();
 }
 ```
 
@@ -376,17 +368,17 @@ sequenceDiagram
 ## 🖥️ Ejecución Local
 
 ```bash
-# Iniciar el servidor de desarrollo
-uv run uvicorn app.main:app --reload
+# Iniciar el servidor de desarrollo expuesto a la red local (para ESP32)
+uv run uvicorn app.main:app --reload --host 0.0.0.0
 ```
 
 Una vez corriendo, la documentación interactiva está disponible en:
 
-| Recurso | URL |
-|---------|-----|
-| **Swagger UI** | [http://localhost:8000/api/docs](http://localhost:8000/api/docs) |
-| **ReDoc** | [http://localhost:8000/api/redoc](http://localhost:8000/api/redoc) |
-| **OpenAPI JSON** | [http://localhost:8000/api/openapi.json](http://localhost:8000/api/openapi.json) |
+| Recurso | URL (Local) | URL (IP Red) |
+|---------|-------------|--------------|
+| **Swagger UI** | [http://localhost:8000/api/docs](http://localhost:8000/api/docs) | [http://192.168.x.x:8000/api/docs](http://192.168.x.x:8000/api/docs) |
+| **ReDoc** | [http://localhost:8000/api/redoc](http://localhost:8000/api/redoc) | - |
+| **OpenAPI JSON** | [http://localhost:8000/api/openapi.json](http://localhost:8000/api/openapi.json) | - |
 
 > [!NOTE]
 > Las URLs de documentación están bajo el prefijo `/api` para mantener consistencia con el resto de los endpoints.

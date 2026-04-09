@@ -1,8 +1,5 @@
 import asyncio
 import logging
-from app.core.database import supabase_client
-from app.modules.iot.repositories.sensor_repo import SensorRepository
-from app.modules.iot.repositories.actuator_repo import ActuatorRepository
 
 logger = logging.getLogger(__name__)
 
