@@ -7,7 +7,7 @@ from fastapi import Header, HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.core.config import settings
-from app.services.supabase_service import supabase_db
+from app.core.database import supabase_client
 import logging
 import asyncio
 
@@ -61,7 +61,7 @@ async def verify_key(api_key: str = Header(..., alias="X-API-Key"), expected_typ
     # Consultar la base de datos (Usamos el cliente de Supabase)
     # Nota: Requiere que el cliente de Supabase tenga permisos para leer api_keys
     try:
-        query = supabase_db.client.table("api_keys").select("*").eq("key_hash", hashed)
+        query = supabase_client.table("api_keys").select("*").eq("key_hash", hashed)
         
         # Si se especifica un tipo, validamos que coincida 
         # (O que sea 'write' si se pide 'read', ya que write es superior)
@@ -84,7 +84,7 @@ async def verify_key(api_key: str = Header(..., alias="X-API-Key"), expected_typ
         # Actualizar last_used_at de forma asíncrona usando run_in_executor
         await loop.run_in_executor(
             None,
-            lambda: supabase_db.client.table("api_keys") \
+            lambda: supabase_client.table("api_keys") \
                 .update({"last_used_at": datetime.now().isoformat()}) \
                 .eq("user_id", key_data["user_id"]) \
                 .eq("key_type", key_data["key_type"]) \

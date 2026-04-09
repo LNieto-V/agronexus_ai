@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+from typing import Any
 from google import genai
 from google.genai import types
 from app.core.config import settings
@@ -9,8 +10,8 @@ from app.core.config import settings
 # ---------------------------------------------------------
 class AIEngineStrategy(ABC):
     @abstractmethod
-    async def generate(self, prompt: str) -> str:
-        """Genera una respuesta en texto desde el modelo subyacente."""
+    async def generate(self, prompt: str, tools: list = None) -> Any:
+        """Genera una respuesta o llamadas a funciones."""
         pass
 
 # ---------------------------------------------------------
@@ -38,7 +39,7 @@ class GeminiEngine(AIEngineStrategy):
         self.client = genai.Client(api_key=self.keys[self.current_key_idx])
         return True
 
-    async def generate(self, prompt: str) -> str:
+    async def generate(self, prompt: str, tools: list = None) -> Any:
         if not self.client:
             raise Exception("No hay API Keys configuradas.")
             
@@ -48,16 +49,18 @@ class GeminiEngine(AIEngineStrategy):
         
         while attempts < max_attempts:
             try:
+                config = types.GenerateContentConfig(
+                    temperature=0.3,
+                    top_p=0.95,
+                    max_output_tokens=4096,
+                    tools=tools
+                )
                 response = await self.client.aio.models.generate_content(
                     model=self.model_name,
                     contents=prompt,
-                    config=types.GenerateContentConfig(
-                        temperature=0.3,
-                        top_p=0.95,
-                        max_output_tokens=4096
-                    )
+                    config=config
                 )
-                return response.text or ""
+                return response
             except Exception as e:
                 error_msg = str(e)
                 last_error = error_msg
@@ -100,6 +103,9 @@ def get_ai_engine() -> AIEngineStrategy:
 # Instancia global (Singleton liviano) para uso rápido, o puede ser inyectado
 current_engine = get_ai_engine()
 
-async def generate_raw_response(prompt: str) -> str:
+async def generate_raw_response(prompt: str, tools: list = None) -> Any:
     """Función envoltoria para compatibilidad estricta con funciones sin inyección AI."""
-    return await current_engine.generate(prompt)
+    res = await current_engine.generate(prompt, tools=tools)
+    if hasattr(res, "text") and res.text:
+        return res.text
+    return res

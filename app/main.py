@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import chat, system, iot, dashboard, auth
+from app.api.routes import chat, system, iot, dashboard, auth, zones, cron
 import logging
 
 # Configuración de logging
@@ -44,3 +44,5 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(iot.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(zones.router, prefix="/api")
+app.include_router(cron.router, prefix="/api")

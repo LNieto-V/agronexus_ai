@@ -2,6 +2,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Dict, Any
 from app.core.config import settings
+from app.services.parser_service import calculate_vpd
 
 AI_DIR = Path(settings.BASE_DIR) / ".agent" / "skills" / "backend-fastapi-iot"
 
@@ -44,6 +45,10 @@ def build_prompt(
         sensor_context = "\n## DATOS DE SENSORES ACTUALES (TIEMPO REAL):\n"
         for key, value in sensor_data.items():
             sensor_context += f"- {key}: {value}\n"
+        
+        # Inyección de VPD
+        vpd = calculate_vpd(sensor_data.get("temperature"), sensor_data.get("humidity"))
+        sensor_context += f"- vpd: {vpd} kPa (Déficit de Presión de Vapor)\n"
 
     # Contexto de Historial y Tendencias (Supabase)
     history_context = f"\n## CONTEXTO HISTÓRICO (ÚLTIMAS 24H):\n{history or 'No hay datos históricos disponibles.'}\n"
