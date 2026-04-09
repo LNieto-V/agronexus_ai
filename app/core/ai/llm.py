@@ -76,23 +76,27 @@ class GeminiEngine(AIEngineStrategy):
                 error_msg = str(e)
                 last_error = error_msg
 
-                # Manejar códigos 429 explícitos o strings de mensaje de Google GenAI
-                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                    import logging
+                # 🔄 Intentar rotar para errores transitorios comunes
+                transient_errors = ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "DEADLINE_EXCEEDED"]
+                is_transient = any(code in error_msg for code in transient_errors)
 
+                if is_transient:
+                    import logging
                     logger = logging.getLogger(__name__)
                     attempts += 1
 
                     if attempts < max_attempts:
                         logger.warning(
-                            f"Llave actual agotada (Índice {self.current_key_idx}). Rotando llave..."
+                            f"Llave actual falló ({error_msg}) en índice {self.current_key_idx}. Rotando..."
                         )
                         self._rotate_key()
+                        continue
                     else:
                         raise Exception(
-                            "CUOTA_AGOTADA: Límite de todas las APIs de Gemini alcanzado. Reintenta más tarde."
+                            f"LIMITE_ALCANZADO: Todas las llaves fallaron o están agotadas. Último error: {error_msg}"
                         )
                 else:
+                    # Si es un error no transitorio (ej: 400 Bad Request), fallamos inmediatamente
                     raise Exception(f"Fallo inesperado del LLM Gemini: {error_msg}")
 
         raise Exception(f"Fallo tras reintentos: {last_error}")
