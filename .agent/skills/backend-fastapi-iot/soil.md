@@ -1,5 +1,10 @@
-# Conocimiento Agrícola: Suelo, EC y pH
+# Conocimiento Agrícola: Suelo, nutrición y salinidad
 
-*   **pH Ideal**: Para la mayoría de los cultivos tropicales listados (Tomate, Pepino), el pH debe estar entre 5.8 y 6.8. Si el pH es muy ácido (< 5.5) o muy alcalino (> 7.5), los nutrientes se bloquean.
-*   **Conductividad Eléctrica (EC)**: La salinidad medida en el agua de riego o suelo es crítica. Para el tomate la EC ideal está entre 1.5 y 2.5 dS/m. Valores de EC mayores a 3.0 pueden quemar las raíces (Estrés salino).
-*   **Recomendación de Corrección de pH**: Si es ácido tratar con Carbonato de Calcio; si es alcalino (muy común en zonas secas), aplicar ácido fosfórico al tanque de mezcla.
+*   **pH Ideal**: Entre 5.8 y 6.8. En suelos costeros suele ser alcalino (> 7.5); corregir inyectando ácidos suaves al fertirriego.
+*   **Conductividad Eléctrica (EC)**: Crítica en la costa. EC > 2.5 dS/m indica acumulación de sales.
+*   **Capacidad de Intercambio Catiónico (CIC/CEC)**: Define la capacidad del suelo para retener nutrientes. En sustratos inertes (fibra de coco, perlita), la CIC es baja, por lo que el fertirriego debe ser preciso y constante.
+*   **Lavado de Sales**: Si la EC del sustrato supera los límites del cultivo (ej. > 3.0 para Tomate), recomendar un riego de lixiviación (flushing) con agua de baja EC para arrastrar el exceso de sodio y cloro.
+
+## Interacción Suelo-Planta
+La salud radicular depende tanto de la humedad como de la oxigenación (porosidad). Un suelo compactado o inundado anula el beneficio de cualquier fertilizante.
+

@@ -1,5 +1,10 @@
-# Conocimiento Agrícola: Riego Inteligente
+# Conocimiento Agrícola: Estrategias de Riego y Fertirriego
 
-*   **Evapotranspiración Activa**: En zonas con alta radiación y brisa costera, el agua se evapora rápidamente de los sustratos. Aplicar riegos cortos pero frecuentes durante el pico de mayor calor (11:00 am - 3:00 pm).
-*   **Déficit Hídrico**: Las plantas con déficit muestran marchitamiento en horas del día. Recomendación proactiva: Activar riego por 15 min. (IRRIGATION ON) de inmediato al detectarse la petición.
-*   **Sobre-riego y Asfixia Radicular**: Evitar riego tras el atardecer para no acumular la humedad ambiental nocturna, previniendo desarrollo de patógenos fúngicos. Sólo regar si el sustrato está críticamente seco o EC es excesivamente alto (lavado de sales).
+*   **Riego por Pulsos**: En lugar de un solo riego largo, aplicar múltiples riegos cortos (ej. de 3 a 5 min) distribuidos durante las horas de mayor demanda evaporativa. Esto mantiene la humedad constante y evita el lixiviado excesivo de nutrientes.
+*   **Correlación con VPD**: Cuando el VPD > 1.2 kPa, la planta transpira más rápido. Incrementar la frecuencia de los pulsos para compensar la pérdida de agua.
+*   **Déficit Hídrico y Recuperación**: Un marchitamiento temporal detectado por baja humedad en sustrato requiere activación inmediata (IRRIGATION ON).
+*   **Lavado preventivo**: Si el historial de telemetría muestra una subida constante de la EC en el tiempo, sugerir un riego pesado sólo con agua para resetear la salinidad del sustrato.
+
+## Fertirriego
+La nutrición se entrega disuelta en el riego. Para cultivos en la costa, es vital monitorear que el pH de la solución de salida sea estable para evitar deficiencias inducidas por el clima.
+

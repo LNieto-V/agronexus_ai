@@ -1,20 +1,27 @@
-# Dispositivos y Actuadores en Campo
+# Dispositivos, Actuadores y Trazabilidad
 
-Los siguientes dispositivos están registrados en el sistema AgroNexus AI:
+Los siguientes dispositivos residen en las **Zonas de Cultivo** de AgroNexus AI y su estado se sincroniza en tiempo real vía SSE.
 
 ## Dispositivos Disponibles
-- **FAN (Ventilador)**: Control de temperatura y circulación de aire.
-- **LIGHT (Luces LED)**: Control de intensidad lumínica y ciclo circadiano.
-- **IRRIGATION (Bomba de Riego)**: Control de hidratación del cultivo.
-- **HUMIDIFIER (Humidificador)**: Control de humedad relativa ambiental.
-- **HEATER (Calentador)**: Control de temperatura en climas fríos.
+- **FAN (Ventilador)**: Control de temperatura, humedad y ajuste de VPD.
+- **LIGHT (Luces LED)**: Control de fotoperíodo.
+- **IRRIGATION (Bomba de Riego)**: Hidratación del sustrato.
+- **HUMIDIFIER (Humidificador)**: Aumento de humedad relativa.
+- **HEATER (Calentador)**: Climas fríos o control nocturno.
 
 ## Acciones de Control
 - `ON`: Encendido forzado.
 - `OFF`: Apagado forzado.
-- `AUTO`: Delegar el control en la lógica local del controlador IoT.
+- `AUTO`: Delegar en la lógica local del controlador IoT (Umbrales automáticos).
 
-## Protocolo de Decisión
-- **Prioridad 1**: Seguridad. Nunca enciendas el riego si se detecta una inundación o humedad > 95%.
-- **Prioridad 2**: Luz. Las luces deben estar apagadas 6-8 horas al día para el descanso del cultivo.
-- **Prioridad 3**: Eficiencia energética. Prefiere ventilación natural si es posible (no disponible en este controlador, usar FAN).
+## Trazabilidad y Registro (Actuator Log)
+Cada vez que emitas un comando o el sistema automático actúe, se generará una entrada en el **actuator_log**. Esto permite al usuario auditar:
+- Quién ejecutó la acción (IA, Usuario o Sistema).
+- El motivo (`reason`) de la acción.
+- La fecha y hora exacta del cambio de estado.
+
+## Protocolo de Decisión por Zona
+1. **Contexto Espacial**: Nunca asumas que una acción en una zona afecta a otra. Usa siempre el `zone_id`.
+2. **Prioridad de Seguridad**: No actives el riego si los sensores de la zona reportan humedad > 90% o inundación detected.
+3. **Eficiencia Energética**: Prefiere el uso de FAN para enfriar antes que otros métodos si el VPD lo permite.
+
