@@ -13,6 +13,8 @@
 
 El sistema está organizado en dominios independientes, lo que permite escalar cada parte de la operación agrícola (IoT, Chat, Identidad) de forma aislada.
 
+---
+
 ```mermaid
 graph TB
     %% ── Clientes ──
@@ -128,6 +130,8 @@ graph TB
     class SB_AUTH,SB_DB infra
 ```
 
+---
+
 ### 📂 Estructura del Proyecto
 ```text
 agronexus_ai/
@@ -219,6 +223,8 @@ El agrónomo virtual de AgroNexus no es un simple chat. Es un orquestador que:
 *   **Consume Contexto IoT**: Lee el estado actual del invernadero antes de responder.
 *   **Toma Acciones**: Puede emitir comandos a actuadores (Bomba, Luces) en formato JSON.
 *   **Historial Aislado**: Cada sesión de chat (`session_id`) mantiene su propio hilo de pensamiento para evitar interferencias entre diferentes cultivos o consultas.
+
+---
 
 ### 🔄 Ciclo de Telemetría e Intervención IA
 
