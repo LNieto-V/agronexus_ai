@@ -27,10 +27,10 @@ class StateService:
                 .eq("user_id", user_id) \
                 .execute())
             
-            if response.data:
+            if response.data and len(response.data) > 0:
                 return response.data[0]
             
-            # Si no existe, creamos el estado inicial para el usuario
+            # Si no existe, lo inicializamos y devolvemos el default
             await self._initialize_state(user_id)
             return self._default_state
         except Exception as e:
@@ -54,7 +54,7 @@ class StateService:
             pass
 
     async def update_mode(self, user_id: str, mode: str) -> bool:
-        """Actualiza el modo en la DB."""
+        """Actualiza el modo en la DB usando upsert."""
         if mode.upper() not in ["AUTO", "MANUAL"]: 
             return False
         try:
@@ -62,8 +62,11 @@ class StateService:
             await loop.run_in_executor(
                 None, 
                 lambda: supabase_client.table("system_state") \
-                    .update({"system_mode": mode.upper()}) \
-                    .eq("user_id", user_id) \
+                    .upsert({
+                        "user_id": user_id, 
+                        "system_mode": mode.upper(),
+                        "updated_at": "now()" 
+                    }) \
                     .execute()
             )
             return True

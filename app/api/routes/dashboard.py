@@ -33,7 +33,12 @@ async def get_history_data(user: CurrentUser, iot: IoT, zone_id: str = None):
 @router.get("/state")
 async def get_system_state(user: CurrentUser):
     """Obtiene el estado interno del sistema."""
-    return await backend_state.get_state(user["id"])
+    state = await backend_state.get_state(user["id"])
+    # Mapeo para compatibilidad con el frontend (system_mode -> mode)
+    return {
+        **state,
+        "mode": state.get("system_mode", "AUTO")
+    }
 
 @router.post("/mode", dependencies=[Depends(require_role(["owner", "agronomist"]))])
 async def update_system_mode(update: SystemModeUpdate, user: CurrentUser):
