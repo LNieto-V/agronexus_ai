@@ -50,7 +50,14 @@ async def telemetry(request: IOTTelemetryRequest, key_meta: WriteKey, iot: IoT) 
         # Inyectar zone_id en los datos para el repositorio
         sensor_data["zone_id"] = target_zone
         
-        # Broadcast para SSE (Real-Time) incluye info de zona
+        # 1. Persistir en base de datos
+        await iot.insert_sensor_data(sensor_data, user_id)
+        
+        # 2. Actualizar estado de la zona a ONLINE
+        if target_zone:
+            await iot.update_zone_heartbeat(target_zone)
+
+        # 3. Broadcast para SSE (Real-Time) incluye info de zona
         asyncio.create_task(telemetry_bus.broadcast({
             "user_id": user_id, 
             "zone_id": target_zone,
