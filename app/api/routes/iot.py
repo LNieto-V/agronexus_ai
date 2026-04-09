@@ -65,6 +65,13 @@ async def telemetry(request: IOTTelemetryRequest, key_meta: WriteKey, iot: IoT) 
         }))
         
         actions, alerts = await process_automated_telemetry(sensor_data, user_id)
+        
+        # Log de diagnóstico para el usuario que reporta pérdida de control
+        if not actions:
+            logger.info(f"Telemetría recibida de zona {target_zone}. No se requieren acciones automáticas.")
+        else:
+            logger.info(f"Acciones generadas para zona {target_zone}: {len(actions)}")
+
         return IOTTelemetryResponse(actions=actions, alerts=alerts)
     except Exception as e:
         if "CUOTA_AGOTADA" in str(e):

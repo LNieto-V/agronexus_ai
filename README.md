@@ -232,6 +232,106 @@ Implementamos un modelo de **Confianza Cero** distribuido en tres capas:
 
 ---
 
+## 🔄 Resiliencia y Persistencia de Zonas
+
+Para garantizar que el sistema sea robusto frente a reinicios del servidor o micro-cortes de red (comunes en despliegues Serverless o entornos de desarrollo):
+
+1.  **Cliente Autocurativo**: El backend utiliza un patrón de *Lazy-Loading* para el cliente de Supabase. Si la conexión se pierde, el sistema intenta re-instanciar el cliente automáticamente en la siguiente petición.
+2.  **Persistencia Garantizada de Zonas**: Las zonas de cultivo se guardan en Supabase de forma síncrona durante su creación y las actualizaciones de estado (*heartbeats*) se verifican antes de retornar la respuesta al hardware.
+3.  **Auditabilidad**: Se han incluido logs detallados que permiten rastrear el flujo de datos desde el ESP32 hasta la base de datos sin exponer secretos.
+
+### 📡 Ejemplo de Integración Hardware (ESP32)
+
+Para conectar un dispositivo físico o simulado sin exponer llaves reales:
+
+**Solicitud de Telemetría (JSON):**
+```json
+// POST /api/iot/telemetry
+// Header: X-API-Key: agnx_w_TU_LLAVE_AQUI (Hash SHA-256 en DB)
+{
+  "zone_id": "88b18d49-07bb-497a-bb35-be497058265c", // UUID de tu zona
+  "sensor_data": {
+    "temperature": 24.5,
+    "humidity": 65.0,
+    "light": 850,
+    "ph": 6.2,
+    "ec": 1.5
+  }
+}
+```
+
+**Respuesta del Backend:**
+```json
+{
+  "actions": [
+    {
+      "device": "PUMP",
+      "action": "ON",
+      "reason": "La IA detectó humedad baja en la zona 1"
+    }
+  ],
+  "alerts": ["Humedad crítica detectada"]
+}
+```
+> [!IMPORTANT]
+> Nunca incluyas el `SUPABASE_SERVICE_ROLE_KEY` ni llaves `agnx_w_` en el código fuente público. Usa `X-API-Key` únicamente en los headers de conexión segura (HTTPS).
+
+#### 🛠️ Firmware de Referencia (ESP32 / Arduino C++)
+
+Puedes usar este esquema base para tu firmware (requiere librería `ArduinoJson`):
+
+```cpp
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+// Configuración (Usa variables de entorno o un archivo secrets.h)
+const char* ssid = "TU_WIFI_SSID";
+const char* password = "TU_WIFI_PASSWORD";
+const char* serverUrl = "https://agronexus-ai.vercel.app/api/iot/telemetry";
+const char* apiKey = "agnx_w_TU_API_KEY_AQUI";
+const char* zoneId = "TU_ZONE_UUID_AQUI";
+
+void sendTelemetry() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-API-Key", apiKey);
+
+    // 1. Preparar JSON de sensores
+    StaticJsonDocument<256> doc;
+    doc["zone_id"] = zoneId;
+    JsonObject sensors = doc.createNestedObject("sensor_data");
+    sensors["temperature"] = readTemp(); // Función que lee el sensor
+    sensors["humidity"] = readHum();
+
+    String jsonStr;
+    serializeJson(doc, jsonStr);
+
+    // 2. Enviar y procesar respuesta
+    int httpCode = http.POST(jsonStr);
+    if (httpCode == 200) {
+      String response = http.getString();
+      StaticJsonDocument<512> result;
+      deserializeJson(result, response);
+
+      // 3. Ejecutar acciones enviadas por la IA
+      JsonArray actions = result["actions"];
+      for (JsonObject action : actions) {
+        if (action["device"] == "PUMP") {
+           digitalWrite(PIN_PUMP, action["action"] == "ON" ? HIGH : LOW);
+           Serial.println("AI COMMAND: Pump " + String(action["action"].as<char*>()));
+        }
+      }
+    }
+    http.end();
+  }
+}
+```
+
+---
+
 ## 💬 Inteligencia Artificial y RAG Dinámico
 
 El agrónomo virtual de AgroNexus no es un simple chat. Es un orquestador que:

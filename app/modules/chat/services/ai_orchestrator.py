@@ -59,14 +59,20 @@ async def process_chatbot_request(message: str, user_id: str, session_id: str | 
     """
     # 1. Obtener datos externos en PARALELO usando servicios por dominio
     raw_history_task = chat.get_chat_history_raw(user_id, limit=15, session_id=session_id)
-    history_task = iot.get_sensor_history(user_id)
+    history_task = iot.get_sensor_history_raw(user_id, limit=20) # RAW para ML/Análisis
     state_task = backend_state.get_state(user_id)
     latest_sensors_task = iot.get_latest_sensors(user_id)
     thresholds_task = idsvc.get_alert_thresholds(user_id)
 
-    raw_history, history, current_state, latest_sensors, thresholds = await asyncio.gather(
+    raw_history, history_raw, current_state, latest_sensors, thresholds = await asyncio.gather(
         raw_history_task, history_task, state_task, latest_sensors_task, thresholds_task
     )
+    
+    # Formatear historial para el prompt (LLM)
+    history_text = "\n".join([
+        f"- {h.get('created_at', '')}: T={h.get('temperature')}°C, H={h.get('humidity')}%" 
+        for h in history_raw
+    ]) if history_raw else "No hay datos históricos."
     
     # 2. Smart Sliding Window & Memory Compression
     chat_context = ""
@@ -88,7 +94,7 @@ async def process_chatbot_request(message: str, user_id: str, session_id: str | 
     full_prompt = build_prompt(
         message=message, 
         sensor_data=latest_sensors,
-        history=history,
+        history=history_text,
         backend_state=current_state,
         chat_history=chat_context
     )
@@ -121,30 +127,35 @@ async def process_chatbot_request(message: str, user_id: str, session_id: str | 
 
 async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str) -> Tuple[List[dict], List[str]]:
     """
-    Procesa telemetría de hardware con paralelismo y verificaciones asíncronas.
+    Procesa telemetría de hardware con paralelismo total y corrección de tipos.
     """
-    # 2. Consulta de contexto en paralelo si hay anomalía
-    history_task = iot.get_sensor_history(user_id)
+    # 1. Obtener todo el contexto en paralelo para evitar latencia y advertencias de "never awaited"
+    history_task = iot.get_sensor_history_raw(user_id, limit=20)
     state_task = backend_state.get_state(user_id)
     thresholds_task = idsvc.get_alert_thresholds(user_id)
     
-    # 1.5 Verificar anomalía con umbrales configurables
-    anomaly = is_anomaly(sensor_data, await thresholds_task)
+    history_raw, current_state, thresholds = await asyncio.gather(
+        history_task, state_task, thresholds_task
+    )
     
-    # 1.6 Predicción de Peligros (ML Simple)
-    history = await history_task
-    predictive_alerts = predict_danger(sensor_data, history)
+    # 2. Análisis de Anomalías y Predicción
+    anomaly = is_anomaly(sensor_data, thresholds)
+    predictive_alerts = predict_danger(sensor_data, history_raw)
     
     if not anomaly and not predictive_alerts:
         return [], []
 
-    current_state = await state_task
+    # 3. Formatear historial para el Prompt (solo si hay algo que reportar)
+    history_text = "\n".join([
+        f"- {h.get('created_at', '')}: T={h.get('temperature')}°C, H={h.get('humidity')}%" 
+        for h in history_raw
+    ]) if history_raw else "No hay datos históricos."
     
-    # 3. Prompt de monitoreo técnico con IA + TOOLS
+    # 4. Generar respuesta de la IA con autoridad de control
     full_prompt = build_prompt(
-        message="SISTEMA: Monitoreo automatizado. Analiza los datos y emite acciones SOLO si hay desviaciones críticas.", 
+        message="SISTEMA DE CONTROL AGRO-NEXUS: Monitoreo crítico detectado. Los sensores muestran valores fuera de rango. Debes emitir acciones CORRECTIVAS inmediatas (ej. FAN ON, PUMP ON) si los niveles de temperatura, humedad o pH ponen en riesgo el cultivo.", 
         sensor_data=sensor_data,
-        history=history,
+        history=history_text,
         backend_state=current_state
     )
 
@@ -154,15 +165,22 @@ async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str)
     actions = tool_actions
     alerts = predictive_alerts + tool_alerts
     
-    # Fallback
+    # Fallback mejorado: Si no hubo tool calls, procesar el texto plano como string
     if not actions:
-        _, regex_actions, regex_alerts = extract_iot_data(response.text if hasattr(response, "text") else "")
+        # Si 'response' ya es un string (de llm.py), lo usamos directamente. 
+        # Si es un objeto de respuesta, sacamos el .text.
+        raw_output = response.text if hasattr(response, "text") else str(response)
+        _, regex_actions, regex_alerts = extract_iot_data(raw_output)
         actions = regex_actions
         alerts += regex_alerts
 
-    # 4. Log Actions
+    # 5. Log e Inyección de metadatos de zona
     if actions:
         zone_id = sensor_data.get("zone_id")
+        for a in actions:
+            if not a.get("zone_id"):
+                a["zone_id"] = zone_id
+        
         await asyncio.gather(*[
             iot.log_actuator_action(
                 user_id, 
@@ -170,7 +188,7 @@ async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str)
                 a.get("action"), 
                 a.get("reason"), 
                 triggered_by="AI",
-                zone_id=zone_id
+                zone_id=a.get("zone_id")
             )
             for a in actions
         ])

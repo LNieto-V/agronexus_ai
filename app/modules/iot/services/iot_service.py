@@ -8,9 +8,30 @@ logger = logging.getLogger(__name__)
 
 class IoTService:
     def __init__(self):
-        self.sensor_repo = SensorRepository(supabase_client)
-        self.actuator_repo = ActuatorRepository(supabase_client)
-        self.client = supabase_client
+        self._client = None
+        self._sensor_repo = None
+        self._actuator_repo = None
+
+    @property
+    def db(self):
+        if not self._client:
+            from app.core.database import get_supabase_client
+            self._client = get_supabase_client()
+        return self._client
+
+    @property
+    def sensor_repo(self):
+        if not self._sensor_repo:
+            from app.modules.iot.repositories.sensor_repo import SensorRepository
+            self._sensor_repo = SensorRepository(self.db)
+        return self._sensor_repo
+
+    @property
+    def actuator_repo(self):
+        if not self._actuator_repo:
+            from app.modules.iot.repositories.actuator_repo import ActuatorRepository
+            self._actuator_repo = ActuatorRepository(self.db)
+        return self._actuator_repo
 
     async def get_sensor_history(self, user_id: str, limit: int = 20, zone_id: str = None) -> str:
         return await self.sensor_repo.get_sensor_history(user_id, limit, zone_id)
@@ -42,48 +63,86 @@ class IoTService:
             "count": len(data)
         }
 
+
     async def get_zones(self, user_id: str):
-        if not self.client:
+        if not self.db:
+            logger.error(f"Cannot get zones: DB client is None for user {user_id}")
             return []
-        loop = asyncio.get_event_loop()
-        res = await loop.run_in_executor(None, lambda: self.client.table("zones").select("*").eq("user_id", user_id).execute())
-        return res.data or []
+        try:
+            target_id = user_id.strip() if isinstance(user_id, str) else user_id
+            logger.info(f"FETCHING ZONES for user_id: '{target_id}'")
+            
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None, 
+                lambda: self.db.table("zones")
+                .select("*")
+                .eq("user_id", target_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            
+            data = res.data or []
+            logger.info(f"RETRIEVED {len(data)} zones for user {target_id}")
+            
+            if len(data) == 0:
+                # Debug: check if table even has data
+                count_res = await loop.run_in_executor(None, lambda: self.db.table("zones").select("id", count="exact").limit(1).execute())
+                logger.debug(f"Total rows in zones table (audit): {getattr(count_res, 'count', 'unknown')}")
+                
+            return data
+        except Exception as e:
+            logger.error(f"Error fetching zones for {user_id}: {e}", exc_info=True)
+            return []
 
     async def create_zone(self, user_id: str, name: str, crop_type: str = None):
-        if not self.client:
+        if not self.db:
+            logger.error("Cannot create zone: DB client is None")
             return None
         try:
             loop = asyncio.get_event_loop()
-            res = await loop.run_in_executor(None, lambda: self.client.table("zones").insert({"user_id": user_id, "name": name, "crop_type": crop_type}).execute())
-            if res.data:
+            payload = {"user_id": user_id, "name": name, "crop_type": crop_type}
+            res = await loop.run_in_executor(None, lambda: self.db.table("zones").insert(payload).execute())
+            
+            if res.data and len(res.data) > 0:
+                logger.info(f"Zone created successfully in DB: {res.data[0]['id']}")
                 return res.data[0]
-            logger.error(f"Create zone returned no data. Possible error: {getattr(res, 'error', 'Unknown')}")
+            
+            logger.error(f"Create zone returned no data. Possible RLS or DB constraint issue. Response: {res}")
             return None
         except Exception as e:
-            logger.error(f"Exception in create_zone: {e}")
+            logger.error(f"Exception in create_zone: {e}", exc_info=True)
             return None
 
     async def update_zone_heartbeat(self, zone_id: str):
-        if not self.client:
+        if not self.db:
             return
-        loop = asyncio.get_event_loop()
-        asyncio.create_task(loop.run_in_executor(None, lambda: self.client.table("zones").update({"status": "ONLINE", "last_seen": "now()"}).eq("id", zone_id).execute()))
+        try:
+            loop = asyncio.get_event_loop()
+            # Usar await en lugar de create_task para asegurar persistencia antes de que el proceso pueda morir o fallar
+            await loop.run_in_executor(None, lambda: self.db.table("zones").update({"status": "ONLINE", "last_seen": "now()"}).eq("id", zone_id).execute())
+        except Exception as e:
+            logger.warning(f"Failed to update heartbeat for zone {zone_id}: {e}")
 
     async def delete_zone(self, user_id: str, zone_id: str) -> bool:
-        if not self.client:
+        if not self.db:
             return False
-        loop = asyncio.get_event_loop()
-        res = await loop.run_in_executor(None, lambda: self.client.table("zones").delete().eq("user_id", user_id).eq("id", zone_id).execute())
-        return len(res.data) > 0 if res.data else True # PostgREST delete returns [] by default, but we can check if it worked
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(None, lambda: self.db.table("zones").delete().eq("user_id", user_id).eq("id", zone_id).execute())
+            return len(res.data) > 0 if res.data else False
+        except Exception as e:
+            logger.error(f"Error deleting zone: {e}")
+            return False
 
     async def update_zone(self, user_id: str, zone_id: str, name: str, crop_type: str = None):
-        if not self.client:
+        if not self.db:
             return None
         try:
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
                 None, 
-                lambda: self.client.table("zones")
+                lambda: self.db.table("zones")
                 .update({"name": name, "crop_type": crop_type})
                 .eq("user_id", user_id)
                 .eq("id", zone_id)
@@ -95,3 +154,4 @@ class IoTService:
             return None
 
 iot_service = IoTService()
+
