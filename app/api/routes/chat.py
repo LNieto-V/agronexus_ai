@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Depends
 import logging
 from app.schemas import (
     ChatRequest, ChatResponse,
     ConversationCreate, ConversationRename, ConversationOut, ChatMessageOut, ChatHistoryOut
 )
-from app.services.iot_service import process_chatbot_request, process_test_chat_request
-from app.api.deps import CurrentUser, DBService
+from app.api.deps import CurrentUser, Chat, require_role
+from app.modules.chat.services.ai_orchestrator import process_chatbot_request, process_test_chat_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -16,20 +16,20 @@ router = APIRouter(tags=["chat"])
 # =====================================================
 
 @router.get("/conversations", response_model=list[ConversationOut])
-async def list_conversations(user: CurrentUser, db: DBService):
+async def list_conversations(user: CurrentUser, chat_svc: Chat):
     """Lista todas las conversaciones del usuario, más recientes primero."""
     try:
-        return await db.get_conversations(user["id"])
+        return await chat_svc.get_conversations(user["id"])
     except Exception as e:
         logger.error(f"Error listando conversaciones: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo conversaciones.")
 
 
-@router.post("/conversations", response_model=ConversationOut, status_code=201)
-async def create_conversation(body: ConversationCreate, user: CurrentUser, db: DBService):
+@router.post("/conversations", response_model=ConversationOut, status_code=201, dependencies=[Depends(require_role(["owner", "agronomist"]))])
+async def create_conversation(body: ConversationCreate, user: CurrentUser, chat_svc: Chat):
     """Crea una nueva sesión de chat y la devuelve."""
     try:
-        result = await db.create_conversation(user["id"], body.title)
+        result = await chat_svc.create_conversation(user["id"], body.title)
         if not result:
             raise HTTPException(status_code=500, detail="No se pudo crear la conversación.")
         return result
@@ -40,28 +40,28 @@ async def create_conversation(body: ConversationCreate, user: CurrentUser, db: D
         raise HTTPException(status_code=500, detail="Error creando conversación.")
 
 
-@router.patch("/conversations/{session_id}")
+@router.patch("/conversations/{session_id}", dependencies=[Depends(require_role(["owner", "agronomist"]))])
 async def rename_conversation(
     body: ConversationRename,
     user: CurrentUser,
-    db: DBService,
+    chat_svc: Chat,
     session_id: str = Path(..., description="UUID de la conversación"),
 ):
     """Renombra el título de una conversación existente."""
-    success = await db.rename_conversation(session_id, user["id"], body.title)
+    success = await chat_svc.rename_conversation(session_id, user["id"], body.title)
     if not success:
         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
     return {"status": "ok", "session_id": session_id, "title": body.title}
 
 
-@router.delete("/conversations/{session_id}", status_code=204)
+@router.delete("/conversations/{session_id}", status_code=204, dependencies=[Depends(require_role(["owner", "agronomist"]))])
 async def delete_conversation(
     user: CurrentUser,
-    db: DBService,
+    chat_svc: Chat,
     session_id: str = Path(..., description="UUID de la conversación"),
 ):
     """Elimina una conversación y todos sus mensajes."""
-    success = await db.delete_conversation(session_id, user["id"])
+    success = await chat_svc.delete_conversation(session_id, user["id"])
     if not success:
         raise HTTPException(status_code=404, detail="Conversación no encontrada.")
 
@@ -70,12 +70,12 @@ async def delete_conversation(
 # MENSAJES (con soporte de sesión)
 # =====================================================
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, user: CurrentUser, db: DBService) -> ChatResponse:
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_role(["owner", "agronomist"]))])
+async def chat(request: ChatRequest, user: CurrentUser, chat_svc: Chat) -> ChatResponse:
     """Endpoint principal de chat agrícola. Acepta session_id opcional para aislar el contexto."""
     try:
         text, actions, alerts = await process_chatbot_request(
-            request.message, user["id"], db, request.session_id
+            request.message, user["id"], request.session_id
         )
         return ChatResponse(response=text, actions=actions, alerts=alerts)
     except Exception as e:
@@ -89,13 +89,10 @@ async def chat(request: ChatRequest, user: CurrentUser, db: DBService) -> ChatRe
 
 
 @router.get("/chat/history", response_model=ChatHistoryOut)
-async def get_history(user: CurrentUser, db: DBService, session_id: str | None = None):
-    """
-    Recupera el historial de chat para la interfaz.
-    Devuelve un objeto { "history": [...] }
-    """
+async def get_history(user: CurrentUser, chat_svc: Chat, session_id: str | None = None, limit: int = 100, offset: int = 0):
+    """Recupera el historial de chat para la interfaz."""
     try:
-        history = await db.get_chat_history_raw(user["id"], limit=100, session_id=session_id)
+        history = await chat_svc.get_chat_history_raw(user["id"], limit=limit, session_id=session_id, offset=offset)
         return ChatHistoryOut(history=history)
     except Exception as e:
         logger.error(f"Error en historial: {e}")
@@ -108,10 +105,10 @@ async def get_history(user: CurrentUser, db: DBService, session_id: str | None =
     summary="[Evaluación] API Test Rápido sin Auth",
     description="Útil para probar el flujo completo del sistema RAG, prompts y personalidad del Agente AI en un entorno aislado sin requerir JWT. Ideal para corrección académica y SwaggerUI."
 )
-async def chat_test(request: ChatRequest, db: DBService) -> ChatResponse:
+async def chat_test(request: ChatRequest) -> ChatResponse:
     """Endpoint de prueba sin autenticación para evaluadores y testing QA."""
     try:
-        text, actions, alerts = await process_test_chat_request(request.message, db)
+        text, actions, alerts = await process_test_chat_request(request.message)
         return ChatResponse(response=text, actions=actions, alerts=alerts)
     except Exception as e:
         logger.error(f"Error en chat test: {e}")
