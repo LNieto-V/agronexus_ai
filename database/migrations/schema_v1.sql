@@ -1,12 +1,5 @@
 -- 🚜 AgroNexus AI: Supabase Schema Definition (AgTech Multi-Chat & IoT)
--- Este archivo define el esquema necesario para el backend asíncrono y el sistema de sesiones.
-
--- Opcional: Limpiar esquema previo (comentado por seguridad)
--- DROP TABLE IF EXISTS public.system_state;
--- DROP TABLE IF EXISTS public.chat_history;
--- DROP TABLE IF EXISTS public.conversations;
--- DROP TABLE IF EXISTS public.sensor_data;
--- DROP TABLE IF EXISTS public.api_keys;
+-- Versión Idempotente (Replicable en múltiples ejecuciones)
 
 -- ==========================================
 -- 1. TELEMETRÍA IOT (sensor_data)
@@ -22,7 +15,6 @@ CREATE TABLE IF NOT EXISTS public.sensor_data (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Índices para optimización de consultas históricas (RAG y Dashboard)
 CREATE INDEX IF NOT EXISTS idx_sensor_data_user_created ON public.sensor_data(user_id, created_at DESC);
 
 -- ==========================================
@@ -109,7 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_actuator_log_user ON public.actuator_log(user_id,
 CREATE TABLE IF NOT EXISTS public.alert_thresholds (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    sensor_type TEXT NOT NULL, -- 'temperature', 'humidity', etc.
+    sensor_type TEXT NOT NULL,
     min_value FLOAT,
     max_value FLOAT,
     is_active BOOLEAN DEFAULT true,
@@ -118,97 +110,36 @@ CREATE TABLE IF NOT EXISTS public.alert_thresholds (
 );
 
 -- ==========================================
--- 9. AUTOMATIZACIÓN: INICIALIZACIÓN DE USUARIO
--- ==========================================
-
--- Función para inicializar el estado del sistema y perfil al registrarse un nuevo usuario
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  -- Crear perfil
-  INSERT INTO public.profiles (id, email)
-  VALUES (new.id, new.email);
-  
-  -- Crear estado del sistema
-  INSERT INTO public.system_state (user_id)
-  VALUES (new.id);
-  
-  -- Umbrales por defecto
-  INSERT INTO public.alert_thresholds (user_id, sensor_type, min_value, max_value)
-  VALUES 
-    (new.id, 'temperature', 15.0, 32.0),
-    (new.id, 'humidity', 40.0, 85.0),
-    (new.id, 'ph', 5.5, 7.5);
-
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- ==========================================
--- 10. SEGURIDAD (Row Level Security)
--- ==========================================
-
-ALTER TABLE public.sensor_data ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.chat_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.system_state ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.actuator_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.alert_thresholds ENABLE ROW LEVEL SECURITY;
-
--- Políticas de usuario
-CREATE POLICY "User Access Policy: sensor_data" ON public.sensor_data FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: conversations" ON public.conversations FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: chat_history" ON public.chat_history FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: api_keys" ON public.api_keys FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: system_state" ON public.system_state FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: profiles" ON public.profiles FOR ALL USING (auth.uid() = id);
-CREATE POLICY "User Access Policy: actuator_log" ON public.actuator_log FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "User Access Policy: alert_thresholds" ON public.alert_thresholds FOR ALL USING (auth.uid() = user_id);
-
--- Comentarios explicativos
-COMMENT ON TABLE public.sensor_data IS 'Almacena lecturas de telemetría provenientes de ESP32 protegidas por usuario.';
-COMMENT ON TABLE public.conversations IS 'Cabeceras de sesión para el sistema multi-chat.';
-COMMENT ON TABLE public.chat_history IS 'Mensajes persistentes de usuario e IA, vinculados a una sesión específica.';
-COMMENT ON TABLE public.system_state IS 'Estado global y configuración personalizada de cada invernadero inteligente.';
-COMMENT ON TABLE public.profiles IS 'Perfiles de usuario con roles (owner, agronomist, viewer).';
-COMMENT ON TABLE public.actuator_log IS 'Historial de acciones ejecutadas por actuadores.';
-COMMENT ON TABLE public.alert_thresholds IS 'Configuración personalizada de umbrales para alertas.';
-
--- ==========================================
--- 11. ZONAS / INVERNADEROS (zones)
+-- 9. ZONAS / INVERNADEROS (zones)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS public.zones (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL, -- Ej: "Invernadero Norte", "Zona Hidropónica 1"
-    crop_type TEXT,     -- Ej: "Tomate", "Lechuga"
-    status TEXT DEFAULT 'OFFLINE', -- 'ONLINE', 'OFFLINE'
+    name TEXT NOT NULL,
+    crop_type TEXT,
+    status TEXT DEFAULT 'OFFLINE',
     last_seen TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Actualizar telemetría y logs para soportar zonas
-ALTER TABLE public.sensor_data ADD COLUMN IF NOT EXISTS zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
-ALTER TABLE public.actuator_log ADD COLUMN IF NOT EXISTS zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
-ALTER TABLE public.system_state ADD COLUMN IF NOT EXISTS zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
+-- Migración idempotente de columnas para zonas
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='zone_id') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='actuator_log' AND column_name='zone_id') THEN
+        ALTER TABLE public.actuator_log ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
+    END IF;
 
-ALTER TABLE public.zones ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "User Access Policy: zones" ON public.zones FOR ALL USING (auth.uid() = user_id);
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='system_state' AND column_name='zone_id') THEN
+        ALTER TABLE public.system_state ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- ==========================================
--- 12. MANTENIMIENTO (maintenance_log)
--- ==========================================
-
--- ==========================================
--- 11. MANTENIMIENTO (maintenance_log)
+-- 10. MANTENIMIENTO (maintenance_log)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS public.maintenance_log (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -218,6 +149,103 @@ CREATE TABLE IF NOT EXISTS public.maintenance_log (
     performed_at TIMESTAMPTZ DEFAULT now()
 );
 
-ALTER TABLE public.maintenance_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "User Access Policy: maintenance_log" ON public.maintenance_log FOR ALL USING (auth.uid() = user_id);
+-- ==========================================
+-- 11. AUTOMATIZACIÓN: INICIALIZACIÓN DE USUARIO
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email)
+  VALUES (new.id, new.email)
+  ON CONFLICT (id) DO NOTHING;
+  
+  INSERT INTO public.system_state (user_id)
+  VALUES (new.id)
+  ON CONFLICT (user_id) DO NOTHING;
+  
+  INSERT INTO public.alert_thresholds (user_id, sensor_type, min_value, max_value)
+  VALUES 
+    (new.id, 'temperature', 15.0, 32.0),
+    (new.id, 'humidity', 40.0, 85.0),
+    (new.id, 'ph', 5.5, 7.5)
+  ON CONFLICT (user_id, sensor_type) DO NOTHING;
 
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ==========================================
+-- 12. SEGURIDAD (Row Level Security) - IDEMPOTENTE
+-- ==========================================
+
+-- Función auxiliar para habilitar RLS y crear políticas sin errores
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOR t IN SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+    END LOOP;
+END $$;
+
+-- Políticas con limpieza previa para evitar "Policy already exists"
+DO $$
+BEGIN
+    -- sensor_data
+    DROP POLICY IF EXISTS "User Access Policy: sensor_data" ON public.sensor_data;
+    CREATE POLICY "User Access Policy: sensor_data" ON public.sensor_data FOR ALL USING (auth.uid() = user_id);
+
+    -- conversations
+    DROP POLICY IF EXISTS "User Access Policy: conversations" ON public.conversations;
+    CREATE POLICY "User Access Policy: conversations" ON public.conversations FOR ALL USING (auth.uid() = user_id);
+
+    -- chat_history
+    DROP POLICY IF EXISTS "User Access Policy: chat_history" ON public.chat_history;
+    CREATE POLICY "User Access Policy: chat_history" ON public.chat_history FOR ALL USING (auth.uid() = user_id);
+
+    -- api_keys
+    DROP POLICY IF EXISTS "User Access Policy: api_keys" ON public.api_keys;
+    CREATE POLICY "User Access Policy: api_keys" ON public.api_keys FOR ALL USING (auth.uid() = user_id);
+
+    -- system_state
+    DROP POLICY IF EXISTS "User Access Policy: system_state" ON public.system_state;
+    CREATE POLICY "User Access Policy: system_state" ON public.system_state FOR ALL USING (auth.uid() = user_id);
+
+    -- profiles
+    DROP POLICY IF EXISTS "User Access Policy: profiles" ON public.profiles;
+    CREATE POLICY "User Access Policy: profiles" ON public.profiles FOR ALL USING (auth.uid() = id);
+
+    -- actuator_log
+    DROP POLICY IF EXISTS "User Access Policy: actuator_log" ON public.actuator_log;
+    CREATE POLICY "User Access Policy: actuator_log" ON public.actuator_log FOR ALL USING (auth.uid() = user_id);
+
+    -- alert_thresholds
+    DROP POLICY IF EXISTS "User Access Policy: alert_thresholds" ON public.alert_thresholds;
+    CREATE POLICY "User Access Policy: alert_thresholds" ON public.alert_thresholds FOR ALL USING (auth.uid() = user_id);
+
+    -- zones
+    DROP POLICY IF EXISTS "User Access Policy: zones" ON public.zones;
+    CREATE POLICY "User Access Policy: zones" ON public.zones FOR ALL USING (auth.uid() = user_id);
+
+    -- maintenance_log
+    DROP POLICY IF EXISTS "User Access Policy: maintenance_log" ON public.maintenance_log;
+    CREATE POLICY "User Access Policy: maintenance_log" ON public.maintenance_log FOR ALL USING (auth.uid() = user_id);
+END $$;
+
+-- ==========================================
+-- 13. COMENTARIOS
+-- ==========================================
+COMMENT ON TABLE public.sensor_data IS 'Almacena lecturas de telemetría provenientes de ESP32 protegidas por usuario.';
+COMMENT ON TABLE public.conversations IS 'Cabeceras de sesión para el sistema multi-chat.';
+COMMENT ON TABLE public.chat_history IS 'Mensajes persistentes de usuario e IA, vinculados a una sesión específica.';
+COMMENT ON TABLE public.system_state IS 'Estado global y configuración personalizada de cada invernadero inteligente.';
+COMMENT ON TABLE public.profiles IS 'Perfiles de usuario con roles (owner, agronomist, viewer).';
+COMMENT ON TABLE public.actuator_log IS 'Historial de acciones ejecutadas por actuadores.';
+COMMENT ON TABLE public.alert_thresholds IS 'Configuración personalizada de umbrales para alertas.';
+COMMENT ON TABLE public.zones IS 'Gestión física de invernaderos o áreas de cultivo.';
