@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
 class Settings(BaseSettings):
@@ -10,8 +10,15 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = "your_service_role_key"
     SUPABASE_JWT_SECRET: str = "your_jwt_secret"
     SUPABASE_JWK: str = "{}"
+    
+    # AgroNexus API config
+    AGRONEXUS_URL: str = "http://localhost:8000"
+    AGRONEXUS_WRITE_KEY: str = ""
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding='utf-8',
+        extra='ignore'
+    )
 
 settings = Settings()

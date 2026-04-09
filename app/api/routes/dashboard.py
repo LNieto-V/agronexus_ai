@@ -13,19 +13,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/latest", response_model=Dict[str, Any])
-async def get_latest_data(user: CurrentUser, iot: IoT):
+async def get_latest_data(user: CurrentUser, iot: IoT, zone_id: str = None):
     """Obtiene los últimos datos de sensores filtrados por usuario."""
     try:
-        return await iot.get_latest_sensors(user["id"])
+        return await iot.get_latest_sensors(user["id"], zone_id)
     except Exception as e:
         logger.error(f"Error en dashboard latest: {e}")
         raise HTTPException(status_code=500, detail="Error obteniendo últimos sensores.")
 
 @router.get("/history", response_model=List[Dict[str, Any]])
-async def get_history_data(user: CurrentUser, iot: IoT):
+async def get_history_data(user: CurrentUser, iot: IoT, zone_id: str = None):
     """Obtiene el historial reciente filtrado por usuario."""
     try:
-        return await iot.get_sensor_history_raw(user["id"])
+        return await iot.get_sensor_history_raw(user["id"], zone_id=zone_id)
     except Exception as e:
         logger.error(f"Error en dashboard history: {e}")
         return []
@@ -44,9 +44,9 @@ async def update_system_mode(update: SystemModeUpdate, user: CurrentUser):
     return {"status": "success", "new_mode": update.mode.upper()}
 
 @router.get("/actuator-log", dependencies=[Depends(require_role(["owner", "agronomist"]))])
-async def get_actuator_logs(user: CurrentUser, iot: IoT, limit: int = 50, offset: int = 0):
+async def get_actuator_logs(user: CurrentUser, iot: IoT, limit: int = 50, offset: int = 0, zone_id: str = None):
     """Obtiene el historial de acciones de los actuadores."""
-    return await iot.get_actuator_logs(user["id"], limit, offset)
+    return await iot.get_actuator_logs(user["id"], limit, offset, zone_id)
 
 @router.get("/stats")
 async def get_stats(user: CurrentUser, iot: IoT, period: int = 24):

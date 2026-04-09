@@ -9,8 +9,9 @@ Este prompt maestro está diseñado para instruir a una IA de desarrollo (Claude
 El backend de AgroNexus AI ha sido migrado a un modelo asíncrono y de persistencia cloud con Supabase. Debes consumir los siguientes flujos modernizados:
 
 1. **Supabase JWT Authorization**: Todos los endpoints a nivel humano (`/chat`, `/conversations`, `/dashboard/*`) ahora validan el header `Authorization: Bearer <jwt>`.
-2. **API Keys de Hardware**: Endpoint `/auth/keys?key_type={read|write}` para expedir llaves a los microcontroladores (ESP32).
-3. **Conversaciones Aisladas**: En vez de un solo chat global infinito, el backend expone rutas CRUD completas para soportar múltiples discusiones, protegiendo así el contexto RAG del Agente y aislando tópicos de conversación. (`/conversations`).
+2. **API Keys de Hardware**: Endpoint `/auth/keys` para expedir llaves. **Importante**: Las llaves de tipo `write` requieren obligatoriamente un `zone_id` para restringir el control de hardware a un invernadero específico.
+3. **Conversaciones Aisladas**: En vez de un solo chat global infinito, el backend expone rutas CRUD completas para soportar múltiples discusiones. (`/conversations`).
+4. **Perfil de Usuario**: Endpoint `PATCH /auth/profile` para actualizar datos como `full_name` y `role`.
 
 ---
 
@@ -42,7 +43,9 @@ interface ChatMessage {
 En la pestaña de Configuración o Control (`TabSystem.vue`):
 -   Integra una sección llamada "Gestión de Hardware" o "Credenciales de Campo".
 -   Coloca botones prominentes para **Generar Key para Dispositivo** (POST `/auth/keys`).
--   **Seguridad**: Cuando el backend devuelva la clave, muéstrala en un `IonAlert` o un modal especializado indicando al usuario: *"Esta es la única vez que verás esta llave maestra, asegúrate de copiarla y quemarla en tu ESP32"* además de ofrecer un botón de *"Copiar al portapapeles"*.
+-   **Seguridad**: Al generar una llave de `write`, solicita al usuario seleccionar primero la **Zona/Invernadero** a la que pertenecerá el dispositivo. No permitas generar llaves de escritura globales.
+-   **Feedback Visual**: Cuando el backend devuelva la clave, muéstrala en un `IonAlert` o un modal especializado indicando al usuario: *"Esta es la única vez que verás esta llave maestra, asegúrate de copiarla y quemarla en tu ESP32"* además de ofrecer un botón de *"Copiar al portapapeles"*.
+-   **Gestión de Perfil**: Agrega campos en la pestaña de ajustes para que el usuario pueda actualizar su `full_name` y ver su `role` (PATCH `/auth/profile`).
 
 ### Fase 4 — Telemetría Activa
 Verificar los paneles visuales que reportan el clima y el estado actual al frontend, para asegurar que el sistema esté trayendo la métrica filtrada. Supabase ahora usa RLS (Row Level Security), por ende, no se alteran los endpoints, pero los tiempos de carga en el frontend requieren mejor manejo visuales (agregando `ion-skeleton-text` como preloaders si hace falta).

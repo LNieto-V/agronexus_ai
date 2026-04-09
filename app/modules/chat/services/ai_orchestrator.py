@@ -162,8 +162,16 @@ async def process_automated_telemetry(sensor_data: Dict[str, Any], user_id: str)
 
     # 4. Log Actions
     if actions:
+        zone_id = sensor_data.get("zone_id")
         await asyncio.gather(*[
-            iot.log_actuator_action(user_id, a.get("device"), a.get("action"), a.get("reason"), triggered_by="AI")
+            iot.log_actuator_action(
+                user_id, 
+                a.get("device"), 
+                a.get("action"), 
+                a.get("reason"), 
+                triggered_by="AI",
+                zone_id=zone_id
+            )
             for a in actions
         ])
 

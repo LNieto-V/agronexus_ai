@@ -2,7 +2,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Dict, Any
 from app.core.config import settings
-from app.services.parser_service import calculate_vpd
+from app.core.utils.parser import calculate_vpd
 
 AI_DIR = Path(settings.BASE_DIR) / ".agent" / "skills" / "backend-fastapi-iot"
 

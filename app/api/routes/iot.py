@@ -32,12 +32,30 @@ class TelemetryBus:
 telemetry_bus = TelemetryBus()
 
 @router.post("/telemetry", response_model=IOTTelemetryResponse)
-async def telemetry(request: IOTTelemetryRequest, user_id: WriteKey, iot: IoT) -> IOTTelemetryResponse:
+async def telemetry(request: IOTTelemetryRequest, key_meta: WriteKey, iot: IoT) -> IOTTelemetryResponse:
     """Endpoint para telemetría de hardware (ESP32)."""
+    user_id = key_meta["user_id"]
+    key_zone_id = key_meta.get("zone_id")
+    
+    # Resolver la zona: Preferencia a la de la llave si esta restringida
+    target_zone = request.zone_id
+    if key_zone_id:
+        if target_zone and target_zone != key_zone_id:
+            logger.warning(f"Intento de posteo en zona cruzada: Key({key_zone_id}) -> Req({target_zone})")
+            raise HTTPException(status_code=403, detail="Esta API Key solo tiene permisos para su zona asignada.")
+        target_zone = key_zone_id
+
     try:
         sensor_data = request.sensor_data.model_dump()
-        # Broadcast para SSE (Real-Time)
-        asyncio.create_task(telemetry_bus.broadcast({"user_id": user_id, "data": sensor_data}))
+        # Inyectar zone_id en los datos para el repositorio
+        sensor_data["zone_id"] = target_zone
+        
+        # Broadcast para SSE (Real-Time) incluye info de zona
+        asyncio.create_task(telemetry_bus.broadcast({
+            "user_id": user_id, 
+            "zone_id": target_zone,
+            "data": sensor_data
+        }))
         
         actions, alerts = await process_automated_telemetry(sensor_data, user_id)
         return IOTTelemetryResponse(actions=actions, alerts=alerts)

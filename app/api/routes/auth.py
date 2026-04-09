@@ -22,13 +22,32 @@ class APIKeyResponse(BaseModel):
     user_id: str
     key_type: str
     key_prefix: str
+    zone_id: Optional[str] = None
     created_at: datetime
     last_used_at: Optional[datetime] = None
 
 class NewAPIKeyResponse(APIKeyResponse):
     api_key: str # Solo se muestra una vez
 
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.patch("/profile")
+async def update_profile(body: ProfileUpdate, user: CurrentUser, identity: Identity):
+    """Actualiza el perfil del usuario."""
+    # Filtrar solo campos enviados
+    update_data = body.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No hay datos para actualizar.")
+    
+    updated_profile = await identity.update_profile(user["id"], update_data)
+    if not updated_profile:
+        raise HTTPException(status_code=404, detail="Perfil no encontrado o error en actualización.")
+    
+    return updated_profile
 
 @router.post("/register")
 async def register(body: RegisterRequest, identity: Identity):
@@ -80,8 +99,15 @@ async def get_keys(user: CurrentUser, identity: Identity):
         raise HTTPException(status_code=500, detail=f"Error al obtener llaves: {str(e)}")
 
 @router.post("/keys", response_model=NewAPIKeyResponse)
-async def create_key(identity: Identity, key_type: str = Query(..., pattern="^(read|write)$"), user: CurrentUser = None):
+async def create_key(identity: Identity, key_type: str = Query(..., pattern="^(read|write)$"), zone_id: Optional[str] = Query(None), user: CurrentUser = None):
     """Genera una nueva API Key para el usuario."""
+    # Validación de seguridad: Write keys SIEMPRE deben tener una zona
+    if key_type == "write" and not zone_id:
+        raise HTTPException(
+            status_code=400, 
+            detail="Security Policy Error: 'write' keys must be restricted to a specific zone."
+        )
+        
     prefix = "agnx_r_" if key_type == "read" else "agnx_w_"
     new_key = generate_api_key(prefix)
     hashed = hash_key(new_key)
@@ -92,6 +118,7 @@ async def create_key(identity: Identity, key_type: str = Query(..., pattern="^(r
             "key_type": key_type,
             "key_hash": hashed,
             "key_prefix": prefix,
+            "zone_id": zone_id,
             "created_at": datetime.now().isoformat()
         }
         

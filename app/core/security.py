@@ -3,7 +3,7 @@ import secrets
 import json
 from datetime import datetime
 from typing import Optional
-from fastapi import Header, HTTPException, Security
+from fastapi import Header, HTTPException, Security, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.core.config import settings
@@ -14,7 +14,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 # Security schemes
-security_bearer = HTTPBearer()
+security_bearer = HTTPBearer(auto_error=False)
 
 def hash_key(key: str) -> str:
     """Hashea la API Key usando SHA-256."""
@@ -25,17 +25,26 @@ def generate_api_key(prefix: str = "agnx_") -> str:
     random_part = secrets.token_urlsafe(32)
     return f"{prefix}{random_part}"
 
-async def get_current_user(auth: HTTPAuthorizationCredentials = Security(security_bearer)):
+async def get_current_user(
+    auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
+    token: Optional[str] = Query(None)
+):
     """
     Verifica el JWT de Supabase y retorna la información del usuario.
+    Soporta extracción desde Header (Bearer) o Query Parameter (token).
     """
+    actual_token = auth.credentials if auth else token
+    
+    if not actual_token:
+        raise HTTPException(status_code=401, detail="No se proporcionaron credenciales de autenticación.")
+
     try:
         # Debug: Ver cabecera del token (ahora en WARNING para que lo veas)
-        header = jwt.get_unverified_header(auth.credentials)
+        header = jwt.get_unverified_header(actual_token)
         logger.warning(f"DEBUG - JWT Header: {header}")
 
         payload = jwt.decode(
-            auth.credentials, 
+            actual_token, 
             json.loads(settings.SUPABASE_JWK) if header.get("alg") == "ES256" else settings.SUPABASE_JWT_SECRET, 
             algorithms=["HS256", "HS384", "HS512", "ES256"],
             options={"verify_aud": False}
@@ -91,7 +100,8 @@ async def verify_key(api_key: str = Header(..., alias="X-API-Key"), expected_typ
                 .execute()
         )
         
-        return key_data["user_id"]
+        # Retornamos la info completa de la llave para validaciones de scope (ej: zone_id)
+        return key_data
         
     except Exception as e:
         if isinstance(e, HTTPException):

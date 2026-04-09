@@ -25,6 +25,7 @@ class ChatResponse(BaseModel):
 
 class IOTTelemetryRequest(BaseModel):
     sensor_data: SensorData
+    zone_id: Optional[str] = None
 
 class IOTTelemetryResponse(BaseModel):
     actions: List[DeviceAction] = []

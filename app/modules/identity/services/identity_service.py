@@ -32,4 +32,22 @@ class IdentityService:
         await loop.run_in_executor(None, lambda: self.client.table("alert_thresholds").upsert({"user_id": user_id, "sensor_type": sensor_type, "min_value": min_val, "max_value": max_val}).execute())
         return True
 
+    async def update_profile(self, user_id: str, profile_data: dict) -> dict:
+        """Actualiza la información del perfil del usuario."""
+        if not self.client:
+            return {}
+        try:
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: self.client.table("profiles")
+                .update(profile_data)
+                .eq("id", user_id)
+                .execute()
+            )
+            return res.data[0] if res.data else {}
+        except Exception as e:
+            logger.error(f"Error en IdentityService.update_profile: {e}")
+            return {}
+
 identity_service = IdentityService()
