@@ -14,36 +14,118 @@
 El sistema está organizado en dominios independientes, lo que permite escalar cada parte de la operación agrícola (IoT, Chat, Identidad) de forma aislada.
 
 ```mermaid
-graph TD
-    subgraph "Capa de Presentación (Frontend/IoT)"
-        UI[Ionic + Vue App]
-        ESP32[Hardware ESP32]
+graph TB
+    %% ── Clientes ──
+    subgraph Clients["🖥️ Clientes"]
+        direction LR
+        UI["📱 Ionic + Vue 3<br/>(PWA)"]
+        ESP["🔌 ESP32<br/>(Hardware IoT)"]
+        CRON["⏰ Vercel Cron"]
     end
 
-    subgraph "API Gateway (FastAPI)"
-        R[Routes]
-        D[Dependencies / Auth]
+    %% ── API Gateway ──
+    subgraph Gateway["⚡ API Gateway — FastAPI"]
+        direction TB
+        CORS["CORS Middleware"]
+        
+        subgraph Auth["🔐 Capa de Autenticación"]
+            JWT["JWT Validator<br/>(Supabase Auth)"]
+            APIKEY["API Key Validator<br/>(SHA-256 Hash)"]
+        end
+
+        subgraph Routes["📡 Routers"]
+            R_AUTH["/auth"]
+            R_IOT["/iot"]
+            R_DASH["/dashboard"]
+            R_CHAT["/chat"]
+            R_ZONES["/zones"]
+            R_CRON["/cron"]
+        end
     end
 
-    subgraph "Dominios (Modules)"
-        IOT[IoT Module: Sensors/Actuators]
-        CHAT[Chat Module: RAG/Sessions]
-        ID[Identity Module: Profiles/Keys]
+    %% ── Dominios ──
+    subgraph Domains["🧩 Capa de Dominio — Modules"]
+        direction LR
+        subgraph MOD_IOT["📡 IoT Module"]
+            IOT_SVC["IoT Service"]
+            IOT_REPO["IoT Repository"]
+            SSE["SSE Bus<br/>(Real-Time)"]
+            STATE["State Service<br/>(system_state)"]
+        end
+
+        subgraph MOD_CHAT["💬 Chat Module"]
+            CHAT_SVC["Chat Service"]
+            CHAT_REPO["Chat Repository"]
+            ORCH["AI Orchestrator<br/>(RAG Engine)"]
+        end
+
+        subgraph MOD_ID["🪪 Identity Module"]
+            ID_SVC["Identity Service"]
+            ID_REPO["Identity Repository"]
+        end
     end
 
-    subgraph "Núcleo (Core)"
-        AI[AI Engine: Gemini]
-        DB[Database: Supabase]
-        SEC[Security Kernel]
+    %% ── Núcleo ──
+    subgraph Core["⚙️ Shared Kernel — Core"]
+        direction LR
+        GEMINI["🧠 Google Gemini<br/>(2.1 Flash)"]
+        PROMPTS["📋 Prompt Engine<br/>(System + RAG)"]
+        ANOMALY["🚨 Anomaly Detector<br/>(Umbrales)"]
     end
 
-    UI -->|JWT| R
-    ESP32 -->|API Key| R
-    R --> D
-    D --> IOT
-    D --> CHAT
-    D --> ID
-    IOT & CHAT & ID --> AI & DB & SEC
+    %% ── Persistencia ──
+    subgraph Infra["☁️ Infraestructura — Supabase"]
+        direction LR
+        SB_AUTH["🔑 Supabase Auth"]
+        SB_DB["🗄️ PostgreSQL<br/>(RLS Enforced)"]
+    end
+
+    %% ── Flujos de Clientes ──
+    UI -->|"JWT Token"| CORS
+    ESP -->|"API Key<br/>(agnx_w_...)"| CORS
+    CRON -->|"Bearer Secret"| R_CRON
+
+    CORS --> Auth
+    JWT --> R_AUTH & R_DASH & R_CHAT & R_ZONES
+    APIKEY --> R_IOT
+
+    %% ── Flujos de Routers a Dominio ──
+    R_IOT --> IOT_SVC
+    R_DASH --> IOT_SVC & STATE
+    R_CHAT --> ORCH
+    R_ZONES --> IOT_SVC
+    R_AUTH --> ID_SVC
+    R_CRON --> ORCH
+
+    %% ── Flujos Internos del Dominio ──
+    IOT_SVC --> IOT_REPO & SSE & ANOMALY
+    ORCH --> CHAT_SVC & PROMPTS & GEMINI
+    CHAT_SVC --> CHAT_REPO
+    ID_SVC --> ID_REPO
+    ANOMALY --> ORCH
+
+    %% ── Flujos a Infraestructura ──
+    IOT_REPO --> SB_DB
+    CHAT_REPO --> SB_DB
+    ID_REPO --> SB_DB
+    STATE --> SB_DB
+    JWT -.->|"Verificación"| SB_AUTH
+
+    %% ── Flujo SSE al Cliente ──
+    SSE -.->|"EventStream"| UI
+
+    %% ── Estilos ──
+    classDef client fill:#1a1a2e,stroke:#e94560,color:#fff
+    classDef gateway fill:#16213e,stroke:#0f3460,color:#fff
+    classDef domain fill:#0f3460,stroke:#533483,color:#fff
+    classDef core fill:#533483,stroke:#e94560,color:#fff
+    classDef infra fill:#2d6a4f,stroke:#40916c,color:#fff
+
+    class UI,ESP,CRON client
+    class CORS,JWT,APIKEY,R_AUTH,R_IOT,R_DASH,R_CHAT,R_ZONES,R_CRON gateway
+    class IOT_SVC,IOT_REPO,SSE,STATE,CHAT_SVC,CHAT_REPO,ORCH,ID_SVC,ID_REPO domain
+    class GEMINI,PROMPTS,ANOMALY core
+    class SB_AUTH,SB_DB infra
 ```
 
 ### 📂 Estructura del Proyecto
@@ -137,6 +219,36 @@ El agrónomo virtual de AgroNexus no es un simple chat. Es un orquestador que:
 *   **Consume Contexto IoT**: Lee el estado actual del invernadero antes de responder.
 *   **Toma Acciones**: Puede emitir comandos a actuadores (Bomba, Luces) en formato JSON.
 *   **Historial Aislado**: Cada sesión de chat (`session_id`) mantiene su propio hilo de pensamiento para evitar interferencias entre diferentes cultivos o consultas.
+
+### 🔄 Ciclo de Telemetría e Intervención IA
+
+```mermaid
+sequenceDiagram
+    participant ESP as 🔌 ESP32 (Hardware)
+    participant API as 🚀 FastAPI Backend
+    participant DB as ☁️ Supabase (DB/Auth)
+    participant AI as 🧠 Gemini AI Engine
+    participant UI as 📱 Mobile App (SSE)
+
+    ESP->>API: POST /telemetry (Sensor Data + API Key)
+    API->>DB: Validar API Key & Permisos de Zona
+    DB-->>API: Key Válida (Owner: Luis)
+    
+    par Paralelo: Persistencia y Notificación
+        API->>DB: INSERT sensor_data
+        API->>UI: Broadcast via SSE (Real-time graph update)
+    end
+
+    API->>AI: ¿Anomalía detectada? (Contexto: Humedad 25%, Temp 30°)
+    Note over AI: El Agente analiza umbrales<br/>y estado histórico (RAG)
+    
+    AI-->>API: JSON: { "action": "ACTIVATE_PUMP", "reason": "Low soil moisture" }
+    
+    alt Acción Requerida
+        API->>DB: INSERT actuator_log (Bomba activada por AI)
+        API-->>ESP: Response: { "actions": ["PUMP_ON"] }
+    end
+```
 
 ---
 
