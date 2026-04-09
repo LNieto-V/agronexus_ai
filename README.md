@@ -11,28 +11,29 @@
 
 ## 🏗️ Arquitectura Modular (DDD-Lite)
 
-El sistema está organizado en dominios independientes, lo que permite escalar cada parte de la operación agrícola (IoT, Chat, Identidad) de forma aislada.
+El sistema está organizado en dominios independientes bajo una estructura de **Capas Desacopladas**, lo que permite una escalabilidad granular.
 
 ---
 
+### 1️⃣ Capa de Entrada y Seguridad
+Gestiona el tráfico entrante, valida la identidad (JWT vs API Key) y enruta las solicitudes.
+
 ```mermaid
 graph TB
-    %% ── Clientes ──
     subgraph Clients["🖥️ Clientes"]
         direction LR
-        UI["📱 Ionic + Vue 3<br/>(PWA)"]
-        ESP["🔌 ESP32<br/>(Hardware IoT)"]
+        UI["📱 Ionic + Vue 3"]
+        ESP["🔌 ESP32 (IoT)"]
         CRON["⏰ Vercel Cron"]
     end
 
-    %% ── API Gateway ──
-    subgraph Gateway["⚡ API Gateway — FastAPI"]
+    subgraph Gateway["⚡ API Gateway (FastAPI)"]
         direction TB
         CORS["CORS Middleware"]
         
-        subgraph Auth["🔐 Capa de Autenticación"]
-            JWT["JWT Validator<br/>(Supabase Auth)"]
-            APIKEY["API Key Validator<br/>(SHA-256 Hash)"]
+        subgraph Auth["🔐 Autenticación"]
+            JWT["JWT Validator<br/>(Supabase)"]
+            APIKEY["API Key Validator<br/>(SHA-256)"]
         end
 
         subgraph Routes["📡 Routers"]
@@ -45,88 +46,102 @@ graph TB
         end
     end
 
-    %% ── Dominios ──
-    subgraph Domains["🧩 Capa de Dominio — Modules"]
-        direction LR
-        subgraph MOD_IOT["📡 IoT Module"]
-            IOT_SVC["IoT Service"]
-            IOT_REPO["IoT Repository"]
-            SSE["SSE Bus<br/>(Real-Time)"]
-            STATE["State Service<br/>(system_state)"]
-        end
-
-        subgraph MOD_CHAT["💬 Chat Module"]
-            CHAT_SVC["Chat Service"]
-            CHAT_REPO["Chat Repository"]
-            ORCH["AI Orchestrator<br/>(RAG Engine)"]
-        end
-
-        subgraph MOD_ID["🪪 Identity Module"]
-            ID_SVC["Identity Service"]
-            ID_REPO["Identity Repository"]
-        end
-    end
-
-    %% ── Núcleo ──
-    subgraph Core["⚙️ Shared Kernel — Core"]
-        direction LR
-        GEMINI["🧠 Google Gemini<br/>(2.1 Flash)"]
-        PROMPTS["📋 Prompt Engine<br/>(System + RAG)"]
-        ANOMALY["🚨 Anomaly Detector<br/>(Umbrales)"]
-    end
-
-    %% ── Persistencia ──
-    subgraph Infra["☁️ Infraestructura — Supabase"]
-        direction LR
-        SB_AUTH["🔑 Supabase Auth"]
-        SB_DB["🗄️ PostgreSQL<br/>(RLS Enforced)"]
-    end
-
-    %% ── Flujos de Clientes ──
     UI -->|"JWT Token"| CORS
-    ESP -->|"API Key<br/>(agnx_w_...)"| CORS
+    ESP -->|"API Key"| CORS
     CRON -->|"Bearer Secret"| R_CRON
 
     CORS --> Auth
     JWT --> R_AUTH & R_DASH & R_CHAT & R_ZONES
     APIKEY --> R_IOT
 
-    %% ── Flujos de Routers a Dominio ──
+    classDef client fill:#1a1a2e,stroke:#e94560,color:#fff
+    classDef gateway fill:#16213e,stroke:#0f3460,color:#fff
+    class UI,ESP,CRON client
+    class CORS,JWT,APIKEY,R_AUTH,R_IOT,R_DASH,R_CHAT,R_ZONES,R_CRON gateway
+```
+
+---
+
+### 2️⃣ Capa de Dominio (Lógica de Negocio)
+Contiene la inteligencia del sistema dividida por responsabilidades agrícolas.
+
+```mermaid
+graph LR
+    subgraph Routes["📡 Routers"]
+        R_IOT["/api/iot"]
+        R_DASH["/api/dashboard"]
+        R_CHAT["/api/chat"]
+        R_AUTH["/api/auth"]
+    end
+
+    subgraph Domains["🧩 Módulos de Dominio"]
+        subgraph MOD_IOT["📡 IoT & Invernadero"]
+            IOT_SVC["IoT Service"]
+            SSE["SSE Bus (Real-Time)"]
+            STATE["State Control"]
+            ANOMALY["Anomaly Detector"]
+        end
+
+        subgraph MOD_CHAT["💬 Asesoría IA"]
+            ORCH["AI Orchestrator"]
+            CHAT_SVC["Chat Service"]
+        end
+
+        subgraph MOD_ID["🪪 Identidad"]
+            ID_SVC["Identity Service"]
+        end
+    end
+
     R_IOT --> IOT_SVC
     R_DASH --> IOT_SVC & STATE
     R_CHAT --> ORCH
-    R_ZONES --> IOT_SVC
     R_AUTH --> ID_SVC
-    R_CRON --> ORCH
-
-    %% ── Flujos Internos del Dominio ──
-    IOT_SVC --> IOT_REPO & SSE & ANOMALY
-    ORCH --> CHAT_SVC & PROMPTS & GEMINI
-    CHAT_SVC --> CHAT_REPO
-    ID_SVC --> ID_REPO
+    
+    IOT_SVC --> SSE & ANOMALY
+    ORCH --> CHAT_SVC
     ANOMALY --> ORCH
 
-    %% ── Flujos a Infraestructura ──
-    IOT_REPO --> SB_DB
-    CHAT_REPO --> SB_DB
-    ID_REPO --> SB_DB
-    STATE --> SB_DB
-    JWT -.->|"Verificación"| SB_AUTH
-
-    %% ── Flujo SSE al Cliente ──
-    SSE -.->|"EventStream"| UI
-
-    %% ── Estilos ──
-    classDef client fill:#1a1a2e,stroke:#e94560,color:#fff
     classDef gateway fill:#16213e,stroke:#0f3460,color:#fff
+    classDef domain fill:#0f3460,stroke:#533483,color:#fff
+    class R_IOT,R_DASH,R_CHAT,R_AUTH gateway
+    class IOT_SVC,SSE,STATE,ANOMALY,ORCH,CHAT_SVC,ID_SVC domain
+```
+
+---
+
+### 3️⃣ Capa de Núcleo e Infraestructura
+Orquestación con Inteligencia Artificial y persistencia de datos segura.
+
+```mermaid
+graph TB
+    subgraph Domains["🧩 Servicios de Dominio"]
+        direction LR
+        IOT_REPO["IoT Repository"]
+        CHAT_REPO["Chat Repository"]
+        ID_REPO["Identity Repository"]
+        ORCH["AI Orchestrator"]
+    end
+
+    subgraph Core["🧠 Inteligencia Artificial"]
+        GEMINI["Google Gemini 2.1"]
+        PROMPTS["Prompt Engine"]
+    end
+
+    subgraph Infra["☁️ Infraestructura (Supabase)"]
+        direction LR
+        SB_AUTH["Supabase Auth"]
+        SB_DB["PostgreSQL (RLS)"]
+    end
+
+    ORCH --> PROMPTS --> GEMINI
+    IOT_REPO & CHAT_REPO & ID_REPO --> SB_DB
+    
     classDef domain fill:#0f3460,stroke:#533483,color:#fff
     classDef core fill:#533483,stroke:#e94560,color:#fff
     classDef infra fill:#2d6a4f,stroke:#40916c,color:#fff
 
-    class UI,ESP,CRON client
-    class CORS,JWT,APIKEY,R_AUTH,R_IOT,R_DASH,R_CHAT,R_ZONES,R_CRON gateway
-    class IOT_SVC,IOT_REPO,SSE,STATE,CHAT_SVC,CHAT_REPO,ORCH,ID_SVC,ID_REPO domain
-    class GEMINI,PROMPTS,ANOMALY core
+    class IOT_REPO,CHAT_REPO,ID_REPO,ORCH domain
+    class GEMINI,PROMPTS core
     class SB_AUTH,SB_DB infra
 ```
 
