@@ -210,6 +210,7 @@ Este script crea automáticamente:
 | 8 | `alert_thresholds` | Umbrales personalizados de alerta. |
 | 9 | `zones` | Invernaderos y áreas de cultivo. |
 | 10 | `maintenance_log` | Registro de mantenimiento. |
+| 11 | `ai_reports` | Persistencia de diagnósticos agronómicos (Caché IA). |
 
 Además configura:
 - 🔒 **Row Level Security (RLS)** en todas las tablas.
@@ -324,6 +325,28 @@ void sendTelemetry() {
 
 ---
 
+```
+
+---
+
+## 📊 Sistema de Reportes Avanzados (IA + PDF)
+
+AgroNexus AI incluye un motor de generación de reportes técnicos resilientes que trascienden el chat convencional.
+
+### 🧠 Arquitectura de Resiliencia IA
+Para optimizar el uso de cuotas (Gemini 429) y garantizar la entrega, el sistema utiliza:
+- **Agregación Inteligente**: Comprime miles de registros en resúmenes horarios (Promedio, Min, Max, Tendencia) para un análisis de IA más contextual y eficiente.
+- **Análisis Persistente (Caché)**: Almacena los diagnósticos en la tabla `ai_reports`. Si se solicita un reporte idéntico en un periodo de 4h, se utiliza el análisis previo, ahorrando cuota.
+- **Generación Modular**: El PDF se genera **siempre**, incluso si la IA no está disponible, garantizando que el usuario tenga acceso a sus datos técnicos y gráficos en todo momento.
+
+### 📈 Visualización de Datos
+El reporte integra automáticamente:
+- **Gráficos de Tendencia**: Renderizados en el servidor con `matplotlib` (Temp, Hum, VPD).
+- **KPIs Agregados**: Tablas estructuradas de rendimiento por métrica.
+- **Diagnóstico Deep IA**: Análisis detallado enfocado en Salud Global, Plagas o Nutrición.
+
+---
+
 ## 💬 Inteligencia Artificial y RAG Dinámico
 
 El agrónomo virtual de AgroNexus no es un simple chat. Es un orquestador que:
@@ -409,6 +432,7 @@ Una vez corriendo, la documentación interactiva está disponible en:
 | `GET` | `/api/dashboard/stats` | JWT | Estadísticas agregadas (min/max/avg). |
 | `GET` | `/api/dashboard/export` | owner, agronomist | Exporta historial de sensores a CSV. |
 | `GET` | `/api/dashboard/maintenance` | JWT | Historial de mantenimiento. |
+| `GET` | `/api/dashboard/ai-report` | JWT | Genera reporte de salud avanzado (PDF + IA). |
 | `GET` | `/api/dashboard/thresholds` | JWT | Obtiene umbrales de alerta. |
 | `PUT` | `/api/dashboard/thresholds` | owner | Configura umbrales de alerta. |
 

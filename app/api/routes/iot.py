@@ -49,6 +49,11 @@ async def telemetry(request: IOTTelemetryRequest, key_meta: WriteKey, iot: IoT) 
         sensor_data = request.sensor_data.model_dump()
         # Inyectar zone_id en los datos para el repositorio
         sensor_data["zone_id"] = target_zone
+
+        # Cálculo automático de VPD si no viene del sensor
+        if sensor_data.get("vpd") is None and sensor_data.get("temperature") is not None and sensor_data.get("humidity") is not None:
+            from app.core.utils.parser import calculate_vpd
+            sensor_data["vpd"] = calculate_vpd(sensor_data["temperature"], sensor_data["humidity"])
         
         # 1. Persistir en base de datos
         await iot.insert_sensor_data(sensor_data, user_id)

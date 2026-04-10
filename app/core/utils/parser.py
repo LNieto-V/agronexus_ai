@@ -67,16 +67,30 @@ def is_anomaly(data: Dict[str, Any], thresholds: List[Dict[str, Any]] = None) ->
         return False
 
     # Fallback a rangos estáticos si no hay configuración en DB
-    temp = data.get("temperature", 25)
-    hum = data.get("humidity", 60)
-    ph = data.get("ph", 6)
+    temp = data.get("temperature")
+    hum = data.get("humidity")
+    ph = data.get("ph")
+    soil_temp = data.get("soil_temperature")
+    soil_hum = data.get("soil_moisture")
+    co2 = data.get("co2")
+    tank = data.get("tank_level")
+    vpd = data.get("vpd")
+
+    # Clima ambiente
+    if temp is not None and (temp < 10 or temp > 38): return True
+    if hum is not None and (hum < 30 or hum > 95): return True
     
-    if temp < 10 or temp > 38:
-        return True
-    if hum < 30 or hum > 95:
-        return True
-    if ph < 4.5 or ph > 8.0:
-        return True
+    # Suelo
+    if soil_temp is not None and (soil_temp < 10 or soil_temp > 35): return True
+    if soil_hum is not None and (soil_hum < 10 or soil_hum > 90): return True
+    
+    # Nutrición
+    if ph is not None and (ph < 4.5 or ph > 8.5): return True
+    
+    # Premium / Recursos
+    if co2 is not None and (co2 < 300 or co2 > 2000): return True
+    if tank is not None and tank < 15: return True # Tanque bajo
+    if vpd is not None and (vpd < 0.3 or vpd > 2.0): return True # Estrés hídrico
     
     return False
 

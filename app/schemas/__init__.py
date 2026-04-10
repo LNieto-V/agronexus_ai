@@ -8,11 +8,23 @@ class DeviceAction(BaseModel):
     reason: Optional[str] = Field(None, description="Motivo de la acción")
 
 class SensorData(BaseModel):
-    temperature: Optional[float] = None
-    humidity: Optional[float] = None
+    # Ambientales
+    temperature: Optional[float] = None       # Temperatura del aire (°C)
+    humidity: Optional[float] = None          # Humedad relativa del aire (%)
+    vpd: Optional[float] = None               # Déficit de Presión de Vapor (kPa)
+    co2: Optional[float] = None               # Dióxido de carbono (ppm)
+
+    # Suelo / Sustrato
+    soil_temperature: Optional[float] = None  # Temperatura de raíz/sustrato (°C)
+    soil_moisture: Optional[float] = None     # Contenido volumétrico de agua VWC (%)
+    
+    # Calidad de nutrición 
     light: Optional[float] = None
     ph: Optional[float] = None
     ec: Optional[float] = None
+
+    # Recursos
+    tank_level: Optional[float] = None        # Nivel de tanque (%)
 
 class ChatRequest(BaseModel):
     message: str

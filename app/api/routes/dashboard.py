@@ -8,9 +8,85 @@ from fastapi.responses import StreamingResponse
 import io
 import csv
 import asyncio
+import datetime
+from app.core.utils.aggregators import aggregate_sensor_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+@router.get("/ai-report")
+async def get_ai_report(user: CurrentUser, iot: IoT, zone_id: str = None, hours: int = 24, focus: str = "general"):
+    """Genera un reporte de salud detallado y resiliente."""
+    try:
+        # 1. Obtener y agregar datos técnicos (Esto SIEMPRE debe funcionar)
+        limit = min(60 * hours, 1440) 
+        history_raw = await iot.get_sensor_history_raw(user["id"], zone_id=zone_id, limit=limit)
+        
+        if not history_raw:
+            raise HTTPException(status_code=404, detail="No hay datos suficientes para generar un reporte.")
+            
+        latest = history_raw[0]
+        aggregated_data = aggregate_sensor_data(history_raw)
+        
+        # 2. Intentar obtener diagnóstico IA (Cache-First)
+        ai_analysis = None
+        # Buscar reporte reciente (< 4h) en DB
+        cached_report = await iot.report_repo.get_latest_report(user["id"], zone_id, hours, focus, max_age_hours=4)
+        
+        if cached_report:
+            logger.info(f"Usando análisis IA cacheado para usuario {user['id']}")
+            ai_analysis = cached_report.get("analysis_text")
+        else:
+            # Intentar generar nuevo análisis
+            try:
+                from app.core.ai.llm import generate_raw_response
+                prompt = f"""
+                ACTÚA COMO UN AGRÓNOMO EXPERTO SENIOR.
+                ENFOQUE: {focus.upper()} | PERIODO: Últimas {hours} horas.
+
+                DATOS AGREGADOS DEL CULTIVO:
+                {aggregated_data}
+                
+                TAREA:
+                Redacta un diagnóstico técnico profesional para un PDF oficial.
+                - Analiza el estado actual y las tendencias observadas.
+                - Proporciona recomendaciones accionables enfocadas en {focus}.
+                - Sé sobrio, técnico y preciso. 
+                - No uses markdown (negritas, tablas, etc). 
+                """
+                ai_analysis = await generate_raw_response(prompt)
+                
+                # Guardar en DB para futuras descargas
+                if ai_analysis:
+                    await iot.report_repo.save_report(user["id"], zone_id, hours, focus, ai_analysis, aggregated_data)
+                    
+            except Exception as ai_err:
+                logger.warning(f"Fallo en IA (Quota/Error), continuando sin diagnóstico: {ai_err}")
+                ai_analysis = None # El PDF se genera igual pero con aviso
+
+        # 3. Ensamblar PDF Profesional (Modular)
+        from app.modules.iot.services.report_service import generate_health_report
+        zone_name = latest.get("zone_name", "Zona Alpha")
+        
+        pdf_bytes = generate_health_report(
+            latest_data=latest,
+            aggregated_data=aggregated_data,
+            history_raw=history_raw,
+            ai_analysis=ai_analysis,
+            zone_name=zone_name,
+            focus=focus
+        )
+        
+        filename = f"reporte_{focus}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error crítico en reporte dashboard: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Fallo interno al procesar el reporte.")
 
 @router.get("/latest", response_model=Dict[str, Any])
 async def get_latest_data(user: CurrentUser, iot: IoT, zone_id: str = None):
@@ -65,12 +141,26 @@ async def export_data(user: CurrentUser, iot: IoT, period: int = 30):
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "temperature", "humidity", "light", "ph", "ec", "created_at"])
+    writer.writerow([
+        "id", "temperature", "humidity", "light", "ph", "ec", 
+        "soil_temperature", "soil_moisture", "vpd", "co2", "tank_level", 
+        "created_at"
+    ])
     
     for row in data:
         writer.writerow([
-            row.get("id"), row.get("temperature"), row.get("humidity"), 
-            row.get("light"), row.get("ph"), row.get("ec"), row.get("created_at")
+            row.get("id"), 
+            row.get("temperature"), 
+            row.get("humidity"), 
+            row.get("light"), 
+            row.get("ph"), 
+            row.get("ec"),
+            row.get("soil_temperature"),
+            row.get("soil_moisture"),
+            row.get("vpd"),
+            row.get("co2"),
+            row.get("tank_level"),
+            row.get("created_at")
         ])
     
     output.seek(0)

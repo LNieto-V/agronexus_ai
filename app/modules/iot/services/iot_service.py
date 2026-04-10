@@ -8,6 +8,7 @@ class IoTService:
         self._client = None
         self._sensor_repo = None
         self._actuator_repo = None
+        self._report_repo = None
 
     @property
     def db(self):
@@ -29,6 +30,13 @@ class IoTService:
             from app.modules.iot.repositories.actuator_repo import ActuatorRepository
             self._actuator_repo = ActuatorRepository(self.db)
         return self._actuator_repo
+
+    @property
+    def report_repo(self):
+        if not self._report_repo:
+            from app.modules.iot.repositories.report_repo import ReportRepository
+            self._report_repo = ReportRepository(self.db)
+        return self._report_repo
 
     async def get_sensor_history(self, user_id: str, limit: int = 20, zone_id: str = None) -> str:
         return await self.sensor_repo.get_sensor_history(user_id, limit, zone_id)
