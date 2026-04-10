@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS public.sensor_data (
     light FLOAT,
     ph FLOAT,
     ec FLOAT,
+    soil_temperature FLOAT,
+    soil_moisture FLOAT,
+    vpd FLOAT,
+    co2 FLOAT,
+    tank_level FLOAT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -122,17 +127,37 @@ CREATE TABLE IF NOT EXISTS public.zones (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Migración idempotente de columnas para zonas
+-- Migración idempotente de columnas
 DO $$ 
 BEGIN 
+    -- zone_id en sensor_data
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='zone_id') THEN
         ALTER TABLE public.sensor_data ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
     END IF;
     
+    -- Nuevas columnas de telemetría en sensor_data
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='soil_temperature') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN soil_temperature FLOAT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='soil_moisture') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN soil_moisture FLOAT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='vpd') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN vpd FLOAT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='co2') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN co2 FLOAT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='sensor_data' AND column_name='tank_level') THEN
+        ALTER TABLE public.sensor_data ADD COLUMN tank_level FLOAT;
+    END IF;
+
+    -- zone_id en actuator_log
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='actuator_log' AND column_name='zone_id') THEN
         ALTER TABLE public.actuator_log ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
     END IF;
 
+    -- zone_id en system_state
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='system_state' AND column_name='zone_id') THEN
         ALTER TABLE public.system_state ADD COLUMN zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL;
     END IF;
@@ -150,7 +175,23 @@ CREATE TABLE IF NOT EXISTS public.maintenance_log (
 );
 
 -- ==========================================
--- 11. AUTOMATIZACIÓN: INICIALIZACIÓN DE USUARIO
+-- 11. REPORTES IA (ai_reports)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.ai_reports (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    zone_id UUID REFERENCES public.zones(id) ON DELETE SET NULL,
+    period_hours INT NOT NULL,
+    focus TEXT NOT NULL,
+    analysis_text TEXT,
+    aggregated_data JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_reports_user_created ON public.ai_reports(user_id, created_at DESC);
+
+-- ==========================================
+-- 12. AUTOMATIZACIÓN: INICIALIZACIÓN DE USUARIO
 -- ==========================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
@@ -180,7 +221,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==========================================
--- 12. SEGURIDAD (Row Level Security) - IDEMPOTENTE
+-- 13. SEGURIDAD (Row Level Security) - IDEMPOTENTE
 -- ==========================================
 
 -- Función auxiliar para habilitar RLS y crear políticas sin errores
@@ -236,10 +277,14 @@ BEGIN
     -- maintenance_log
     DROP POLICY IF EXISTS "User Access Policy: maintenance_log" ON public.maintenance_log;
     CREATE POLICY "User Access Policy: maintenance_log" ON public.maintenance_log FOR ALL USING (auth.uid() = user_id);
+
+    -- ai_reports
+    DROP POLICY IF EXISTS "User Access Policy: ai_reports" ON public.ai_reports;
+    CREATE POLICY "User Access Policy: ai_reports" ON public.ai_reports FOR ALL USING (auth.uid() = user_id);
 END $$;
 
 -- ==========================================
--- 13. COMENTARIOS
+-- 14. COMENTARIOS
 -- ==========================================
 COMMENT ON TABLE public.sensor_data IS 'Almacena lecturas de telemetría provenientes de ESP32 protegidas por usuario.';
 COMMENT ON TABLE public.conversations IS 'Cabeceras de sesión para el sistema multi-chat.';
@@ -249,3 +294,4 @@ COMMENT ON TABLE public.profiles IS 'Perfiles de usuario con roles (owner, agron
 COMMENT ON TABLE public.actuator_log IS 'Historial de acciones ejecutadas por actuadores.';
 COMMENT ON TABLE public.alert_thresholds IS 'Configuración personalizada de umbrales para alertas.';
 COMMENT ON TABLE public.zones IS 'Gestión física de invernaderos o áreas de cultivo.';
+COMMENT ON TABLE public.ai_reports IS 'Persistencia de diagnósticos agronómicos generados por IA.';
