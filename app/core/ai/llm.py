@@ -27,76 +27,107 @@ class GeminiEngine(AIEngineStrategy):
         )
         self.current_key_idx = 0
         self.model_name = "gemini-2.5-flash"
+        self._key_cooldowns: dict[int, float] = {}
+        self.COOLDOWN_SECONDS = 30
 
         if not self.keys:
             import logging
-
-            logging.getLogger(__name__).warning(
-                "No se configuraron API Keys para Gemini."
-            )
-            self.client = None
-        else:
-            self.client = genai.Client(api_key=self.keys[self.current_key_idx])
-
-    def _rotate_key(self) -> bool:
-        """Cambia a la siguiente API Key configurada."""
-        if len(self.keys) <= 1:
-            return False
-        self.current_key_idx = (self.current_key_idx + 1) % len(self.keys)
-        self.client = genai.Client(api_key=self.keys[self.current_key_idx])
-        return True
+            logging.getLogger(__name__).warning("No se configuraron API Keys para Gemini.")
 
     async def generate(self, prompt: str, tools: list = None) -> Any:
-        if not self.client:
+        if not self.keys:
             raise Exception("No hay API Keys configuradas.")
 
-        # 🔄 Rotación proactiva para balanceo de carga (Round Robin)
-        if len(self.keys) > 1:
-            self._rotate_key()
-            import logging
+        import logging
+        import time
+        import asyncio
+        import random
 
-            logging.getLogger(__name__).info(
-                f"Balanceo de Carga: Usando llave API índice {self.current_key_idx}"
-            )
+        logger = logging.getLogger(__name__)
+
+        # Rotación inteligente
+        now = time.time()
+        start_idx = -1
+        
+        if len(self.keys) > 1:
+            for _ in range(len(self.keys)):
+                idx = self.current_key_idx
+                self.current_key_idx = (self.current_key_idx + 1) % len(self.keys)
+                
+                if idx not in self._key_cooldowns or now - self._key_cooldowns[idx] > self.COOLDOWN_SECONDS:
+                    if idx in self._key_cooldowns:
+                        del self._key_cooldowns[idx]
+                    start_idx = idx
+                    break
+                    
+            if start_idx == -1:
+                start_idx = min(self._key_cooldowns.keys(), key=lambda k: self._key_cooldowns[k])
+                self.current_key_idx = (start_idx + 1) % len(self.keys)
+        else:
+            start_idx = 0
+
+        logger.info(f"Balanceo de Carga: Usando llave API índice {start_idx} (Total disponibles: {len(self.keys)})")
 
         attempts = 0
-        max_attempts = len(self.keys)
+        max_attempts = len(self.keys) * 2
         last_error = None
+        current_idx = start_idx
 
         while attempts < max_attempts:
+            client = genai.Client(api_key=self.keys[current_idx])
+
             try:
                 config = types.GenerateContentConfig(
-                    temperature=0.3, top_p=0.95, max_output_tokens=4096, tools=tools
+                    temperature=0.3, top_p=0.95, max_output_tokens=8192, tools=tools
                 )
-                response = await self.client.aio.models.generate_content(
+                response = await client.aio.models.generate_content(
                     model=self.model_name, contents=prompt, config=config
                 )
+                
+                # Éxito: Limpiar cooldown si la llave arrastraba uno
+                if current_idx in self._key_cooldowns:
+                    del self._key_cooldowns[current_idx]
                 return response
+
             except Exception as e:
                 error_msg = str(e)
                 last_error = error_msg
+                attempts += 1
 
-                # 🔄 Intentar rotar para errores transitorios comunes
-                transient_errors = ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "DEADLINE_EXCEEDED"]
+                transient_errors = ["503", "UNAVAILABLE", "DEADLINE_EXCEEDED"]
+                quota_errors = ["429", "RESOURCE_EXHAUSTED"]
+
                 is_transient = any(code in error_msg for code in transient_errors)
+                is_quota = any(code in error_msg for code in quota_errors)
 
-                if is_transient:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    attempts += 1
-
+                if is_transient or is_quota:
                     if attempts < max_attempts:
-                        logger.warning(
-                            f"Llave actual falló ({error_msg}) en índice {self.current_key_idx}. Rotando..."
-                        )
-                        self._rotate_key()
+                        # Registrar fallo
+                        self._key_cooldowns[current_idx] = time.time()
+                        
+                        if is_transient:
+                            # 503: Backoff y reintento con la misma llave
+                            base_delay = 1.5
+                            delay = base_delay * (2 ** (attempts - 1)) + random.uniform(0, 1)
+                            wait_time = min(delay, 8)
+                            logger.warning(
+                                f"Error temporal ({error_msg}) en llave {current_idx}. "
+                                f"Esperando {wait_time:.1f}s (backoff)..."
+                            )
+                            await asyncio.sleep(wait_time)
+                        else:
+                            # 429: Rotar inmediatamente
+                            logger.warning(
+                                f"Límite de cuota o error permanente ({error_msg}) en índice {current_idx}. Rotando..."
+                            )
+                            current_idx = (current_idx + 1) % len(self.keys)
+
                         continue
                     else:
                         raise Exception(
                             f"LIMITE_ALCANZADO: Todas las llaves fallaron o están agotadas. Último error: {error_msg}"
                         )
                 else:
-                    # Si es un error no transitorio (ej: 400 Bad Request), fallamos inmediatamente
                     raise Exception(f"Fallo inesperado del LLM Gemini: {error_msg}")
 
         raise Exception(f"Fallo tras reintentos: {last_error}")

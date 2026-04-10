@@ -1,11 +1,13 @@
 from fastapi import APIRouter, HTTPException, Path, Depends
 import logging
 from app.schemas import (
-    ChatRequest, ChatResponse,
+    ChatRequest, ChatResponse, ReportChatRequest,
     ConversationCreate, ConversationRename, ConversationOut, ChatMessageOut, ChatHistoryOut
 )
 from app.api.deps import CurrentUser, Chat, require_role
-from app.modules.chat.services.ai_orchestrator import process_chatbot_request, process_test_chat_request
+from app.modules.chat.services.ai_orchestrator import (
+    process_chatbot_request, process_test_chat_request, process_report_request
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
@@ -113,3 +115,24 @@ async def chat_test(request: ChatRequest) -> ChatResponse:
     except Exception as e:
         logger.error(f"Error en chat test: {e}")
         raise HTTPException(status_code=500, detail="Error en el nodo de prueba.")
+
+@router.post("/chat/report", response_model=ChatResponse, dependencies=[Depends(require_role(["owner", "agronomist"]))])
+async def generate_report(request: ReportChatRequest, user: CurrentUser, chat_svc: Chat) -> ChatResponse:
+    """Endpoint dedicado a la generación de reportes agronómicos en formato chat."""
+    try:
+        report_text = await process_report_request(
+            user_id=user["id"],
+            zone_id=request.zone_id,
+            hours=request.hours,
+            focus=request.focus,
+            session_id=request.session_id
+        )
+        return ChatResponse(response=report_text)
+    except Exception as e:
+        if "LIMITE_ALCANZADO" in str(e):
+            raise HTTPException(
+                status_code=429,
+                detail="Límite de cuota o tasa de peticiones alcanzado. Por favor, reintenta más tarde."
+            )
+        logger.error(f"Error generando reporte: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generando el reporte agronómico.")

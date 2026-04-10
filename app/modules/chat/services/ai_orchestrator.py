@@ -9,6 +9,7 @@ from app.core.ai.llm import generate_raw_response
 from app.core.ai.prompts import build_prompt
 from app.core.ai.tools import IOT_TOOLS
 from app.core.utils.parser import extract_iot_data, is_anomaly, predict_danger
+from app.core.utils.aggregators import aggregate_sensor_data
 
 logger = logging.getLogger(__name__)
 
@@ -225,3 +226,112 @@ async def process_test_chat_request(message: str) -> Tuple[str, List[dict], List
     
     raw_text = await generate_raw_response(full_prompt)
     return extract_iot_data(raw_text)
+
+def _build_fallback_report(aggregated_data: dict, latest: dict, zone_name: str, hours: int, focus: str) -> str:
+    """
+    Genera un reporte estadístico en Markdown si el LLM falla o está ocupado.
+    """
+    focus_title = focus.upper()
+    return f"""# REPORTE TÉCNICO AGRONÓMICO: {zone_name} (FALLBACK)
+
+> [!WARNING]
+> **Modo Fallback Activo**: El motor de Análisis de IA se encuentra bajo alta demanda temporal. Se presenta el reporte estadístico de métricas crudas.
+
+## 1. RESUMEN TÉCNICO DE KPIs ({hours}h)
+
+| Métrica | Promedio Histórico | Valor Actual | Tendencia |
+|---------|------------------|--------------|-----------|
+| **Temperatura** | {aggregated_data.get('avg_temp', 'N/A')}°C | {latest.get('temperature', 'N/A')}°C | {aggregated_data.get('trend_temp', 'ESTABLE')} |
+| **Humedad** | {aggregated_data.get('avg_humidity', 'N/A')}% | {latest.get('humidity', 'N/A')}% | {aggregated_data.get('trend_humidity', 'ESTABLE')} |
+| **pH** | {aggregated_data.get('avg_ph', 'N/A')} | {latest.get('ph', 'N/A')} | {aggregated_data.get('trend_ph', 'ESTABLE')} |
+| **EC** | {aggregated_data.get('avg_ec', 'N/A')} mS/cm | {latest.get('ec', 'N/A')} mS/cm | {aggregated_data.get('trend_ec', 'ESTABLE')} |
+
+## 2. ANÁLISIS DE ESTADO BÁSICO
+* **Enfoque solicitado:** {focus_title}
+* **Última actualización:** {latest.get('created_at', 'Desconocido')}
+
+*Nota: Para obtener recomendaciones avanzadas de un agrónomo experto, por favor solicita un nuevo reporte en unos minutos una vez que la capacidad del modelo se normalice.*
+"""
+
+async def process_report_request(user_id: str, zone_id: str = None, hours: int = 24, focus: str = "general", session_id: str | None = None) -> str:
+    """
+    Genera un reporte agronómico detallado en formato Markdown para el chat.
+    """
+    # 1. Obtener datos técnicos
+    try:
+        limit = min(60 * hours, 1440) 
+        history_raw = await iot.get_sensor_history_raw(user_id, zone_id=zone_id, limit=limit)
+    except Exception as e:
+        logger.error(f"Error obteniendo datos técnicos para reporte: {e}")
+        return "Hubo un error al obtener los datos de los sensores de la base de datos. Por favor, reintenta más tarde."
+
+    if not history_raw:
+        return "No hay datos suficientes para generar un reporte detallado en este momento."
+        
+    latest = history_raw[0]
+    aggregated_data = aggregate_sensor_data(history_raw)
+    zone_name = latest.get("zone_name", "Zona Alpha")
+    
+    # 2. Generar Diagnóstico IA de Alto Nivel con Prompt Enriquecido
+    prompt = f"""
+    ACTÚA COMO UN AGRÓNOMO EXPERTO SENIOR CON ESPECIALIDAD EN AGRICULTURA DE PRECISIÓN Y DATOS IOT.
+    TU OBJETIVO ES ENTREGAR UN DIAGNÓSTICO TÉCNICO PROFESIONAL, ANALÍTICO Y ACCIONABLE.
+
+    CONTEXTO DEL REPORTE:
+    - ENFOQUE: {focus.upper()} 
+    - ZONA: {zone_name} 
+    - PERIODO DE ANÁLISIS: Últimas {hours} horas.
+
+    ---
+    1. DATOS ACTUALES DE SENSORES (TIEMPO REAL):
+    {latest}
+
+    2. RESUMEN ESTADÍSTICO AGREGADO DEL PERIODO:
+    {aggregated_data}
+    ---
+
+    TAREA:
+    Escribe un REPORTE TÉCNICO detallado utilizando el siguiente formato exacto en MARKDOWN:
+
+    # REPORTE TÉCNICO AGRONÓMICO: {zone_name}
+
+    ## 1. RESUMEN TÉCNICO DE KPIs
+    (Crea una tabla de Markdown que compare los promedios del periodo vs valores actuales y su tendencia (ASC/DESC/ESTABLE). Explica brevemente si los valores están dentro del rango óptimo para cultivos estándar).
+
+    ## 2. ANÁLISIS DEL MICRO-CLIMA Y ENTORNO
+    (Analiza la temperatura y humedad. Explica la relación entre ambos y, de ser posible, comenta sobre el VPD (Déficit de Presión de Vapor) observado y su impacto en la transpiración).
+
+    ## 3. ESTADO DE SUELO Y NUTRICIÓN
+    (Analiza pH, EC, humedad y temperatura de suelo. Comenta cómo estas condiciones afectan la disponibilidad de nutrientes para la planta según las tendencias observadas).
+
+    ## 4. EVALUACIÓN DE RIESGOS Y ALERTAS
+    (Identifica anomalías o desviaciones críticas. Evalúa el riesgo de plagas, enfermedades fúngicas o estrés abiótico basado en el historial reciente).
+
+    ## 5. RECOMENDACIONES ACCIONABLES (ENFOQUE: {focus.upper()})
+    (Proporciona al menos 3 pasos concretos que el usuario deba realizar (ej: ajustar riego, ventilar, verificar sensores ph, etc). Sé específico y data-driven).
+
+    ## 6. CONCLUSIÓN Y VERIFICACIÓN EN CAMPO
+    (Cierra con un juicio experto sobre la salud global del invernadero).
+
+    REGLAS DE ESTILO:
+    - Tono: Sobrio, técnico, empoderador.
+    - Evita generalidades como "tus plantas están bien". Usa: "Los niveles de humedad del 85% indican un riesgo latente de Botrytis".
+    - Extensión: Sé exhaustivo pero directo al grano.
+    """
+    
+    try:
+        report_text = await generate_raw_response(prompt)
+    except Exception as e:
+        logger.error(f"LLM falló para reporte: {e}")
+        report_text = _build_fallback_report(aggregated_data, latest, zone_name, hours, focus)
+        
+    # 3. Persistencia en Chat (Opcional pero recomendado)
+    try:
+        if session_id:
+            user_msg = f"Solicitud de reporte: {focus} ({hours}h)"
+            await chat.save_chat_message(user_id, "user", user_msg, session_id)
+            await chat.save_chat_message(user_id, "ai", report_text, session_id)
+    except Exception as e:
+        logger.error(f"Error guardando contexto del reporte en DB: {e}")
+            
+    return report_text
