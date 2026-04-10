@@ -432,7 +432,6 @@ Una vez corriendo, la documentación interactiva está disponible en:
 | `GET` | `/api/dashboard/stats` | JWT | Estadísticas agregadas (min/max/avg). |
 | `GET` | `/api/dashboard/export` | owner, agronomist | Exporta historial de sensores a CSV. |
 | `GET` | `/api/dashboard/maintenance` | JWT | Historial de mantenimiento. |
-| `GET` | `/api/dashboard/ai-report` | JWT | Genera reporte de salud avanzado (PDF + IA). |
 | `GET` | `/api/dashboard/thresholds` | JWT | Obtiene umbrales de alerta. |
 | `PUT` | `/api/dashboard/thresholds` | owner | Configura umbrales de alerta. |
 
@@ -450,6 +449,7 @@ Una vez corriendo, la documentación interactiva está disponible en:
 | `POST` | `/api/chat` | owner, agronomist | Interacción con el agrónomo IA (soporta `session_id`). |
 | `GET` | `/api/chat/history` | JWT | Historial de mensajes (paginado, filtrable por sesión). |
 | `POST` | `/api/chat/test` | *Ninguna* | Endpoint de prueba sin auth para evaluación/QA. |
+| `POST` | `/api/chat/report` | owner, agronomist | Genera un reporte agronómico detallado en Markdown. |
 | `GET` | `/api/conversations` | JWT | Lista todas las conversaciones del usuario. |
 | `POST` | `/api/conversations` | owner, agronomist | Crea una nueva sesión de chat. |
 | `PATCH` | `/api/conversations/{session_id}` | owner, agronomist | Renombra una conversación. |

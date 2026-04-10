@@ -73,3 +73,9 @@ class ChatMessageOut(BaseModel):
 
 class ChatHistoryOut(BaseModel):
     history: List[ChatMessageOut]
+
+class ReportChatRequest(BaseModel):
+    zone_id: Optional[str] = None
+    hours: int = 24
+    focus: str = "general"
+    session_id: Optional[str] = None
