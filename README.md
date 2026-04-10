@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.135%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-DB%20%26%20Auth-3ecf8e?logo=supabase)](https://supabase.com/)
-[![Gemini](https://img.shields.io/badge/Gemini-2.1--Flash-4285F4?logo=google-gemini)](https://ai.google.dev/)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5--Flash-4285F4?logo=google-gemini)](https://ai.google.dev/)
 
 **AgroNexus AI** es un ecosistema backend de alto rendimiento diseñado para la gestión inteligente de invernaderos. Basado en una arquitectura **DDD-Lite (Domain-Driven Design Lite)**, desacopla la lógica de negocio del hardware y la infraestructura, permitiendo una orquestación asíncrona entre telemetría IoT, inteligencia artificial (Google Gemini) y persistencia en la nube (Supabase).
 
@@ -123,7 +123,7 @@ graph TB
     end
 
     subgraph Core["🧠 Inteligencia Artificial"]
-        GEMINI["Google Gemini 2.1"]
+        GEMINI["Google Gemini 2.5"]
         PROMPTS["Prompt Engine"]
     end
 
@@ -185,7 +185,8 @@ cp .env.example .env
 |----------|-----------------|
 | `SUPABASE_JWT_SECRET` | Validación de tokens de usuario (Auth). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Bypass de RLS para operaciones administrativas. |
-| `GEMINI_API_KEY` | Cerebro de la IA (Orquestador). |
+| `GEMINI_API_KEY` | Llave primaria de la IA (Orquestador). |
+| `GEMINI_API_KEYS` | *(Opcional)* Lista de llaves separadas por coma para rotación inteligente con balanceo de carga. |
 
 ### 3. Base de Datos (Replicable)
 
@@ -329,21 +330,24 @@ void sendTelemetry() {
 
 ---
 
-## 📊 Sistema de Reportes Avanzados (IA + PDF)
+## 📊 Sistema de Reportes Agronómicos (IA + Fallback Estadístico)
 
-AgroNexus AI incluye un motor de generación de reportes técnicos resilientes que trascienden el chat convencional.
+AgroNexus AI genera reportes técnicos directamente en el chat, en formato **Markdown**, eliminando la dependencia de librerías PDF del lado del servidor.
 
 ### 🧠 Arquitectura de Resiliencia IA
-Para optimizar el uso de cuotas (Gemini 429) y garantizar la entrega, el sistema utiliza:
+Para optimizar el uso de cuotas y garantizar la entrega **siempre**, el sistema utiliza:
 - **Agregación Inteligente**: Comprime miles de registros en resúmenes horarios (Promedio, Min, Max, Tendencia) para un análisis de IA más contextual y eficiente.
-- **Análisis Persistente (Caché)**: Almacena los diagnósticos en la tabla `ai_reports`. Si se solicita un reporte idéntico en un periodo de 4h, se utiliza el análisis previo, ahorrando cuota.
-- **Generación Modular**: El PDF se genera **siempre**, incluso si la IA no está disponible, garantizando que el usuario tenga acceso a sus datos técnicos y gráficos en todo momento.
+- **Rotación Inteligente de API Keys**: Soporta múltiples llaves (`GEMINI_API_KEYS`) con balanceo Round Robin, cooldown de 30s por llave fallida y backoff exponencial con jitter para errores 503.
+- **Diferenciación de Errores**: Los errores `503` (servicio ocupado) aplican backoff y reintentan con la misma llave; los errores `429` (cuota agotada) rotan inmediatamente a la siguiente llave disponible.
+- **Fallback Estadístico**: Si **todas** las llaves fallan, el sistema genera automáticamente un reporte Markdown con tablas de KPIs crudos (promedios, tendencias, valores actuales) usando los datos agregados de la base de datos. El usuario **siempre** recibe sus métricas.
 
-### 📈 Visualización de Datos
-El reporte integra automáticamente:
-- **Gráficos de Tendencia**: Renderizados en el servidor con `matplotlib` (Temp, Hum, VPD).
-- **KPIs Agregados**: Tablas estructuradas de rendimiento por métrica.
-- **Diagnóstico Deep IA**: Análisis detallado enfocado en Salud Global, Plagas o Nutrición.
+### 📈 Contenido del Reporte
+El reporte IA incluye automáticamente:
+- **KPIs Tabulados**: Comparación de promedios históricos vs valores actuales con tendencia.
+- **Análisis de Micro-Clima**: Temperatura, humedad y VPD (Déficit de Presión de Vapor).
+- **Estado de Suelo y Nutrición**: pH, EC, humedad de suelo y disponibilidad de nutrientes.
+- **Evaluación de Riesgos**: Detección de anomalías, plagas, enfermedades fúngicas.
+- **Recomendaciones Accionables**: Pasos concretos y data-driven para el agricultor.
 
 ---
 
