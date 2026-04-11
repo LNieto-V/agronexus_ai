@@ -42,3 +42,14 @@ Implement comprehensive testing strategies with pytest, fixtures, mocking, and t
 - `.claude/skills/python-testing-patterns/references/advanced-patterns.md`: Advanced testing patterns including async code, monkeypatching, temporary files, conftest setup, property-based testing, database testing, CI/CD integration, and configuration.
 
 <!-- autoskills:end -->
+
+---
+
+## 🛠️ Solución de Problemas (Troubleshooting)
+
+### Fallo en `npx autoskills`
+Si la instalación de una skill falla (ej. `jezweb/claude-skills/fastapi`), intenta:
+1. Asegurarte de tener conexión a internet estable.
+2. Ejecutar con el flag verbose: `npx autoskills --verbose`.
+3. Verificar que el repositorio de skills de origen esté accesible.
+4. Si el error persiste, instala la skill manualmente clonando el repo en `.agents/skills/`.

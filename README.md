@@ -150,18 +150,29 @@ graph TB
 ### 📂 Estructura del Proyecto
 ```text
 agronexus_ai/
-├── app/
-│   ├── api/            # Capa de Entrada: Routers y Dependencias (Auth/DI)
-│   │   └── routes/     # Endpoints de cada dominio
-│   ├── core/           # Shared Kernel: AI (Prompts), Database, Security
-│   ├── modules/        # Capa de Dominio: Servicios y Repositorios (Lógica pura)
-│   │   ├── iot/        # Gestión de telemetría y actuadores
-│   │   ├── chat/       # Orquestación de IA y sesiones RAG
-│   │   └── identity/   # Gestión de perfiles, roles y llaves de seguridad
-│   ├── schemas/        # DTOs: Modelos Pydantic para validación de datos
-│   └── main.py         # Punto de entrada y configuración de FastAPI
-└── database/           # Migraciones y scripts SQL (Supabase)
+├── app/            # Capa de Entrada: Routers y Dependencias (Auth/DI)
+├── core/           # Shared Kernel: AI (Prompts), Database, Security
+├── modules/        # Capa de Dominio: Servicios y Repositorios (Lógica pura)
+│   ├── iot/        # Gestión de telemetría y actuadores
+│   ├── chat/       # Orquestación de IA y sesiones RAG
+│   └── identity/   # Gestión de perfiles, roles y llaves de seguridad
+├── schemas/        # DTOs: Modelos Pydantic para validación de datos
+├── database/       # Migraciones y scripts SQL (Supabase)
+├── firmware/       # Código fuente para ESP32-C6 (Producción)
+├── docs/           # Documentación extendida y planes de sincronización
+├── CLAUDE.md       # Guía de desarrollo asistido por IA (Skills)
+└── main.py         # Punto de entrada y configuración de FastAPI
 ```
+
+---
+
+## 🤖 Desarrollo Asistido por IA (Claude Skills)
+
+Este proyecto utiliza **Claude Code** y una arquitectura de **Skills** modulares para acelerar el desarrollo.
+
+- **[CLAUDE.md](file:///home/tensei/agronexus_ai/CLAUDE.md)**: Contiene el resumen de todas las capacidades de IA instaladas.
+- **`.agents/skills/`**: Directorio con las definiciones técnicas de cada skill (FastAPI, Pydantic, Testing, etc.).
+- **Atajos**: Usa `npx autoskills` para sincronizar y actualizar las herramientas de IA del proyecto.
 
 ---
 
@@ -281,7 +292,7 @@ Para conectar un dispositivo físico o simulado sin exponer llaves reales:
 
 #### 🛠️ Firmware de Referencia (ESP32-C6 / Arduino C++)
 
-El firmware de AgroNexus para ESP32-C6 está optimizado para procesar respuestas de IA de baja latencia (soporta timeouts de 20s para el razonamiento de Gemini):
+El firmware completo para el nodo **ESP32-C6** se encuentra en [firmware/agronexus_esp32c6.ino](file:///home/tensei/agronexus_ai/firmware/agronexus_esp32c6.ino). Está diseñado para procesar respuestas de IA de baja latencia y gestionar hardware real o simulado.
 
 ```cpp
 #include <WiFi.h>
