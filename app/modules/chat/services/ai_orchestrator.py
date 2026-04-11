@@ -273,6 +273,10 @@ async def process_report_request(user_id: str, zone_id: str = None, hours: int =
     zone_name = latest.get("zone_name", "Zona Alpha")
     
     # 2. Generar Diagnóstico IA de Alto Nivel con Prompt Enriquecido
+    specific_zone_rule = ""
+    if zone_id:
+        specific_zone_rule = "\n    - ATENCIÓN: AL TRATARSE DE UN REPORTE PARA UNA ZONA DE MONITOREO ESPECÍFICA, DEBES REDACTAR UN INFORME MUCHO MÁS EXTENSO Y PROFUNDO TÉCNICAMENTE. NO OMITAS EXPLICACIONES CIENTÍFICAS NI JUSTIFICACIONES. CADA PUNTO DEBE ESTAR EXTENSAMENTE DESARROLLADO (ESPERAMOS DE 2 A 3 PÁRRAFOS POR SECCIÓN)."
+
     prompt = f"""
     ACTÚA COMO UN AGRÓNOMO EXPERTO SENIOR CON ESPECIALIDAD EN AGRICULTURA DE PRECISIÓN Y DATOS IOT.
     TU OBJETIVO ES ENTREGAR UN DIAGNÓSTICO TÉCNICO PROFESIONAL, ANALÍTICO Y ACCIONABLE.
@@ -296,27 +300,28 @@ async def process_report_request(user_id: str, zone_id: str = None, hours: int =
     # REPORTE TÉCNICO AGRONÓMICO: {zone_name}
 
     ## 1. RESUMEN TÉCNICO DE KPIs
-    (Crea una tabla de Markdown que compare los promedios del periodo vs valores actuales y su tendencia (ASC/DESC/ESTABLE). Explica brevemente si los valores están dentro del rango óptimo para cultivos estándar).
+    (En forma de lista con viñetas amplias, compara los promedios del periodo vs valores actuales y su tendencia (ASC/DESC/ESTABLE) para cada KPI pertinente. Explica exhaustivamente si estos valores actuales están dentro del rango óptimo para cultivos estándar).
 
     ## 2. ANÁLISIS DEL MICRO-CLIMA Y ENTORNO
-    (Analiza la temperatura y humedad. Explica la relación entre ambos y, de ser posible, comenta sobre el VPD (Déficit de Presión de Vapor) observado y su impacto en la transpiración).
+    (Analiza la temperatura y humedad en profundidad. Explica la relación entre ambos, el impacto del VPD y cómo afecta directamente la transpiración y crecimiento de la planta).
 
     ## 3. ESTADO DE SUELO Y NUTRICIÓN
-    (Analiza pH, EC, humedad y temperatura de suelo. Comenta cómo estas condiciones afectan la disponibilidad de nutrientes para la planta según las tendencias observadas).
+    (Analiza pH, EC, humedad y temperatura de suelo de forma detallada. Explica científica y prácticamente cómo estas condiciones están afectando la absorción de nutrientes).
 
     ## 4. EVALUACIÓN DE RIESGOS Y ALERTAS
-    (Identifica anomalías o desviaciones críticas. Evalúa el riesgo de plagas, enfermedades fúngicas o estrés abiótico basado en el historial reciente).
+    (Identifica anomalías o desviaciones críticas. Evalúa exhaustivamente el riesgo de plagas, enfermedades fungosas o estrés abiótico basado en el historial reciente).
 
     ## 5. RECOMENDACIONES ACCIONABLES (ENFOQUE: {focus.upper()})
-    (Proporciona al menos 3 pasos concretos que el usuario deba realizar (ej: ajustar riego, ventilar, verificar sensores ph, etc). Sé específico y data-driven).
+    (Proporciona al menos 4 pasos concretos altamente detallados y ordenados por prioridad que el operario deba realizar. Sé muy específico y data-driven).
 
     ## 6. CONCLUSIÓN Y VERIFICACIÓN EN CAMPO
-    (Cierra con un juicio experto sobre la salud global del invernadero).
+    (Cierra con un juicio experto, robusto y profesional sobre la salud global del cultivo).
 
     REGLAS DE ESTILO:
     - Tono: Sobrio, técnico, empoderador.
     - Evita generalidades como "tus plantas están bien". Usa: "Los niveles de humedad del 85% indican un riesgo latente de Botrytis".
-    - Extensión: Sé exhaustivo pero directo al grano.
+    - Extensión: Sé exhaustivo pero directo al grano.{specific_zone_rule}
+    - IMPORTANTE: GENERA EL REPORTE COMPLETO HASTA EL PUNTO 6. NO CORTES LA RESPUESTA A LA MITAD.
     """
     
     try:
